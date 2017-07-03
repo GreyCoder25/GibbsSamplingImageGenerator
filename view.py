@@ -85,8 +85,8 @@ class MainPage(tk.Frame):
 
     def image_graphs_init(self):
 
-        IMAGE_WIDTH = 20
-        IMAGE_HEIGHT = 20
+        IMAGE_WIDTH = self.controller.sampler.image_width
+        IMAGE_HEIGHT = self.controller.sampler.image_height
 
         fig, axes = plt.subplots(figsize=(10, 3), nrows=1, ncols=3)
 
@@ -98,18 +98,20 @@ class MainPage(tk.Frame):
             ax.set_title(graph_name)
             ax.xaxis.set_ticks_position('top')
 
-        self.pix_vals_gen = self.controller.sampler.image
-        self.pix_vals_rec = self.controller.recognizer.image
+        # self.pix_vals_gen = self.controller.sampler.image
+        # self.pix_vals_rec = self.controller.recognizer.image
         self.image_init(axes[0])
         return fig
 
     def image_init(self, ax, pix_vals_type='gen'):
 
+        COLORS = ('red', 'blue', 'green', 'cyan', 'magenta', 'yellow', 'black', 'white')
+
         if pix_vals_type == 'gen':
-            pix_vals = self.pix_vals_gen
+            pix_vals = self.controller.sampler.image
         elif pix_vals_type == 'rec':
-            pix_vals = self.pix_vals_rec
-        cmap = mpl.colors.ListedColormap(['red', 'blue', 'green'])
+            pix_vals = self.controller.recognizer.image
+        cmap = mpl.colors.ListedColormap(COLORS[:self.controller.sampler.num_colors])
         p = ax.pcolormesh(pix_vals, cmap=cmap)
 
     def reset(self):
@@ -121,32 +123,33 @@ class MainPage(tk.Frame):
             ax.set_ylim(size, 0)
             ax.set_xlim(0, size)
 
-        self.pix_vals_gen = self.controller.sampler.image
+        # self.pix_vals_gen = self.controller.sampler.image
+        # self.pix_vals_rec = self.controller.recognizer.image
         self.image_init(self.canvas.figure.axes[0])
         self.canvas.draw()
 
     def update_generated_image(self):
-        self.pix_vals_gen = self.controller.sampler.image
+        # self.pix_vals_gen = self.controller.sampler.image
         self.image_init(self.canvas.figure.axes[0])
         self.canvas.draw()
 
     def update_recognized_image(self):
-        self.pix_vals_rec = self.controller.recognizer.image
+        # self.pix_vals_rec = self.controller.recognizer.image
         self.image_init(self.canvas.figure.axes[2], 'rec')
         self.canvas.draw()
 
     def show_noisy_image(self):
         self.controller.sampler.noise()
-        self.pix_vals_gen = self.controller.sampler.image
+        # self.pix_vals_gen = self.controller.sampler.image
         self.controller.recognizer.image = self.controller.sampler.image
         self.image_init(self.canvas.figure.axes[1])
         self.image_init(self.canvas.figure.axes[2])
         self.canvas.draw()
 
     def next_generating_iteration(self):
-        for i in range(10):
+        for i in range(10):                         # TODO fix
             self.controller.sampler.iteration_of_generation()
-            self.update_generated_image()
+        self.update_generated_image()
 
     def next_recognition_iteration(self):
         self.controller.recognizer.iteration_of_recognition()
@@ -174,9 +177,9 @@ class SettingsPage(tk.Frame):
         quit_button = tk.Button(self, text="Quit", command=self.quit)
         quit_button.pack(side="right", expand=True)
 
-        control_panel = tk.Frame(self)
-        self.control_panel_init(control_panel)
-        control_panel.pack(side="left", expand=True)
+        self.control_panel = tk.Frame(self)
+        self.control_panel_init(self.control_panel)
+        self.control_panel.pack(side="left", expand=True)
 
     def set_g(self, g_entries, g_type):
         i = 0
@@ -187,6 +190,15 @@ class SettingsPage(tk.Frame):
                 self.controller.sampler.set_g(i, j, value, g_type)
                 j += 1
             i += 1
+
+    def set_num_colors(self, entry):      
+        num_colors = int(entry.get())
+        self.controller.sampler.set_num_colors(num_colors)
+        self.control_panel.destroy()
+        self.control_panel = tk.Frame(self)
+        self.control_panel_init(self.control_panel)
+        self.control_panel.pack(side="left", expand=True)
+        self.controller.frames[MainPage].update_generated_image()
 
     def set_num_iterations(self, object, entry):
         num_iter = int(entry.get())
@@ -199,16 +211,14 @@ class SettingsPage(tk.Frame):
         self.controller.frames[MainPage].change_image_size(size)
 
     def control_panel_init(self, control_panel):
-        num_rows = 12
-        num_columns = 6
-        RED = 0
-        BLUE = 1
-        GREEN = 2
-        COLORS = (RED, BLUE, GREEN)
+        num_colors = self.controller.sampler.num_colors
+        num_rows = 2 * (self.controller.sampler.num_colors + 3)
+        num_columns = self.controller.sampler.num_colors + 3
 
-        label_names = ['Number of generating iterations:', 'Image size:', 'Number of recognition iterations:']
-        color_names = ['Red', 'Blue', 'Green']
-        label_grid_coords = [(0, 6), (3, 6), (6, 6)]
+        label_names = ['Number of generating iterations:', 'Image size:', 'Number of recognition iterations:', 'Num colors:']
+        COLOR_NAMES = ('Red', 'Blue', 'Green', 'Cyan', 'Magenta', 'Yellow', 'Black', 'White')
+        label_grid_coords = [(0, num_columns), (3, num_columns), (6, num_columns), (9, num_columns)]
+
         entries = []
         for label_name, label_coords in zip(label_names, label_grid_coords):
             tk.Label(control_panel, text=label_name).grid(row=label_coords[0], column=label_coords[1])
@@ -222,15 +232,17 @@ class SettingsPage(tk.Frame):
         entries[1].bind('<Return>', lambda event : self.set_image_size(entries[1]))
         entries[2].insert(0, '1000')
         entries[2].bind('<Return>', lambda event: self.set_num_iterations(self.controller.recognizer, entries[2]))
+        entries[3].insert(0, str(num_colors))
+        entries[3].bind('<Return>', lambda event: self.set_num_colors(entries[3]))
 
         g_horizontal_entries = []
         g_vertical_entries = []
         g_entries = [g_vertical_entries, g_horizontal_entries]
 
-        for gs, start_row in zip(g_entries, [0, 6]):
-            for row in range(start_row, start_row + 3):
-                tk.Label(control_panel, text=color_names[row - start_row]).grid(row=row + 1, column=0)
-                tk.Label(control_panel, text=color_names[row - start_row]).grid(row=0, column=row + 1 - start_row)
+        for gs, start_row in zip(g_entries, [0, num_colors + 3]):
+            for row in range(start_row, start_row + num_colors):
+                tk.Label(control_panel, text=COLOR_NAMES[row - start_row]).grid(row=row + 1, column=0)
+                tk.Label(control_panel, text=COLOR_NAMES[row - start_row]).grid(row=0, column=row + 1 - start_row)
                 entries_row = []
                 for column in range(num_columns - 3):
                     ent = tk.Entry(control_panel)
@@ -240,10 +252,10 @@ class SettingsPage(tk.Frame):
                 gs.append(entries_row)
 
         set_g_button = tk.Button(control_panel, text="Set vertical g's", command=lambda: self.set_g(g_vertical_entries, "v"))
-        set_g_button.grid(row=6, column=2)
+        set_g_button.grid(row=num_colors + 3, column=2)
 
         set_g_button = tk.Button(control_panel, text="Set horizontal g's", command=lambda: self.set_g(g_horizontal_entries, "h"))
-        set_g_button.grid(row=12, column=2)
+        set_g_button.grid(row=2 * (num_colors + 3), column=2)
 
 
 
