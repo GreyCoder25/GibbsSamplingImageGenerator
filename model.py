@@ -65,12 +65,12 @@ class GibbsSamplingImageGenerator:
     def set_g(self, color1, color2, value, g_type):
         if g_type == "h":
             self.g_horizontal[color1, color2] = value
-            print('g_horizontal[%d, %d] = %f' % (color1, color2, value))
-            print('g_horizontal:\n', self.g_horizontal, "\n")
+            # print('g_horizontal[%d, %d] = %f' % (color1, color2, value))
+            # print('g_horizontal:\n', self.g_horizontal, "\n")
         elif g_type == "v":
             self.g_vertical[color1, color2] = value
-            print('g_vertical[%d, %d] = %f' % (color1, color2, value))
-            print('g_vertical:\n', self.g_vertical, "\n")
+            # print('g_vertical[%d, %d] = %f' % (color1, color2, value))
+            # print('g_vertical:\n', self.g_vertical, "\n")
 
     def _get_color_prob(self, i, j, color):
         p = 1
