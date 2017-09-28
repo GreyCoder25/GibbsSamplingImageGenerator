@@ -1,12 +1,18 @@
 import matplotlib as mpl
-mpl.use("TkAgg")
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 import model
 import tkinter as tk
 
+mpl.use("TkAgg")
+
+
 class ImageGeneratorApp(tk.Tk):
+
+    """
+    Main class of the image generating application.
+    """
 
     def __init__(self, *args, **kwargs):
 
@@ -18,7 +24,7 @@ class ImageGeneratorApp(tk.Tk):
         container.grid_rowconfigure(0, weight=1)
         container.grid_columnconfigure(0, weight=1)
 
-        self.frames = {}
+        self.frames = {}                                    # dictionary of pages in graphical interface
         self.sampler = model.GibbsSamplingImageGenerator()
         self.recognizer = model.GibbsSamplingImageRecognizer(self.sampler)
 
@@ -28,7 +34,6 @@ class ImageGeneratorApp(tk.Tk):
             frame.grid(row=0, column=0, sticky="nsew")
 
         self.show_frame(MainPage)
-
 
     def show_frame(self, controller):
 
@@ -62,6 +67,7 @@ class MainPage(tk.Frame):
 
         reset_button = tk.Button(self, text="Reset", command=self.reset)
         reset_button.grid(row=0, column=self.num_columns - 3)
+
 
         # buttons for generated image graph
         tk.Button(self, text="Next iteration", command=self.next_generating_iteration).grid(row=2,
@@ -115,7 +121,11 @@ class MainPage(tk.Frame):
         p = ax.pcolormesh(pix_vals, cmap=cmap)
 
     def reset(self):
-        pass
+        print('Main Page: Reset button clicked')
+        print(self.controller.sampler.image)
+        self.controller.sampler.reset()
+        print(self.controller.sampler.image)
+        self.update_generated_image()
 
     def change_image_size(self, size):
 
@@ -200,9 +210,10 @@ class SettingsPage(tk.Frame):
         self.control_panel.pack(side="left", expand=True)
         self.controller.frames[MainPage].update_generated_image()
 
-    def set_num_iterations(self, object, entry):
+    def set_num_iterations(self, object_, entry):
         num_iter = int(entry.get())
-        object.set_num_iterations(num_iter)
+        object_.set_num_iterations(num_iter)
+        # entry.insert(0, entry.get())
 
     def set_image_size(self, entry):
         size = int(entry.get())
@@ -226,8 +237,19 @@ class SettingsPage(tk.Frame):
             ent.grid(row=label_coords[0] + 1, column=label_coords[1])
             entries.append(ent)
 
+        # entries_texts = ('100', '20', '1000', str(num_colors))
+        # entries_actions = (
+        #     self.set_num_iterations,
+        #     self.set_image_size,
+        #     self.set_num_iterations,
+        #     self.set_num_colors
+        # )
+        # for entry, text, action in zip(entries, entries_texts, entries_actions):
+        #     entry.insert(0, text)
+        #     entry.bind('<Return>', lambda event : action(entry))
+
         entries[0].insert(0, '100')
-        entries[0].bind('<Return>', lambda event: self.set_num_iterations(self.controller.sampler, entries[0]))
+        entries[0].bind('<Return>', lambda event : self.set_num_iterations(entries[0]))
         entries[1].insert(0, '20')
         entries[1].bind('<Return>', lambda event : self.set_image_size(entries[1]))
         entries[2].insert(0, '1000')
