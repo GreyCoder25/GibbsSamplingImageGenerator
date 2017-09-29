@@ -64,13 +64,8 @@ class GibbsSamplingImageGenerator:
 
     def reset(self):
         """Resets the generated image."""
-
-        print('Reset of generation started')
-        print(self.image)
         self.image = np.random.randint(0, self.num_colors, size=(self.image_height, self.image_width))
-        print(self.image)
         self.current_iteration = 0
-        print('Reset of generation finished')
 
     def noise(self):                            # TODO rewrite
         # print(self.image)
@@ -113,6 +108,13 @@ class GibbsSamplingImageGenerator:
             self.g_vertical[color1, color2] = value
             # print('g_vertical[%d, %d] = %f' % (color1, color2, value))
             # print('g_vertical:\n', self.g_vertical, "\n")
+
+    def get_g(self, color1, color2, g_type):
+
+        if g_type == "h":
+            return self.g_horizontal[color1, color2]
+        elif g_type == "v":
+            return self.g_vertical[color1, color2]
 
     def _get_color_prob(self, i, j, color):
 
@@ -160,9 +162,6 @@ class GibbsSamplingImageGenerator:
         self.g_horizontal = np.ones((self.num_colors, self.num_colors))
         self.g_vertical = np.ones((self.num_colors, self.num_colors))
         print(self.g_horizontal, self.g_vertical)
-
-    def reset(self):                                # TODO function written but not introduced
-        pass
 
     def _check_coords(self, i, j):
         return (0 <= i < self.image_height) and (0 <= j < self.image_width)
