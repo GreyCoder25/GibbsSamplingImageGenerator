@@ -47,7 +47,7 @@ class ImageGeneratorApp(tk.Tk):
         frame = self.frames[controller]
         frame.tkraise()
 
-    def quit(self):
+    def save(self):
         with open('settings.pickle', 'wb') as f:
             for object_ in [self.sampler, self.recognizer]:
                 pickle.dump(object_, f)
@@ -176,7 +176,7 @@ class MainPage(tk.Frame):
         self.update_recognized_image()
 
     def quit(self):
-        self.controller.quit()
+        self.controller.save()
         tk.Frame.quit(self)
 
 
@@ -288,7 +288,7 @@ class SettingsPage(tk.Frame):
         set_g_button.grid(row=2 * (num_colors + 3), column=2)
 
     def quit(self):
-        self.controller.quit()
+        self.controller.save()
         tk.Frame.quit(self)
 
 

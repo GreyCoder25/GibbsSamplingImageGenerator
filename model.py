@@ -60,7 +60,6 @@ class GibbsSamplingImageGenerator:
                     end_of_interval += p_colors[color + 1]
 
         self.current_iteration += 1
-        # print(self.image, "\n")
 
     def reset(self):
         """Resets the generated image."""
@@ -102,12 +101,8 @@ class GibbsSamplingImageGenerator:
 
         if g_type == "h":
             self.g_horizontal[color1, color2] = value
-            # print('g_horizontal[%d, %d] = %f' % (color1, color2, value))
-            # print('g_horizontal:\n', self.g_horizontal, "\n")
         elif g_type == "v":
             self.g_vertical[color1, color2] = value
-            # print('g_vertical[%d, %d] = %f' % (color1, color2, value))
-            # print('g_vertical:\n', self.g_vertical, "\n")
 
     def get_g(self, color1, color2, g_type):
 
