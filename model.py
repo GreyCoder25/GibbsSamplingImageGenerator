@@ -1,4 +1,5 @@
 import numpy as np
+import noise
 
 
 class GibbsSamplingImageGenerator:
@@ -24,6 +25,7 @@ class GibbsSamplingImageGenerator:
             Specifies number of iterations of Gibbs sampler for image generating.
         """
 
+        self.noiser = noise.Noiser()
         self.image_width = image_width
         self.image_height = image_height
         self.num_colors = num_colors
@@ -51,7 +53,7 @@ class GibbsSamplingImageGenerator:
                 p_colors.append(0)              # for next cycle to work
 
                 start_of_interval, end_of_interval = 0, p_colors[0]
-                # color = 0
+
                 for color in COLORS:
                     if start_of_interval <= rand_point <= end_of_interval:
                         self.image[i, j] = color
@@ -62,25 +64,20 @@ class GibbsSamplingImageGenerator:
         self.current_iteration += 1
 
     def reset(self):
+
         """Resets the generated image."""
         self.image = np.random.randint(0, self.num_colors, size=(self.image_height, self.image_width))
         self.current_iteration = 0
 
-    def noise(self):                            # TODO rewrite
-        # print(self.image)
-        # for beginning I've chosen the simplest noise algorithm
+    def noise(self):
 
-        RED, BLUE, GREEN = 0, 1, 2
-        COLORS = (RED, BLUE, GREEN)
-        for i in range(0, self.image_height):
-            for j in range(0, self.image_width):
-                if self.image[i, j] == RED:
-                    self.image[i, j] = np.random.choice([RED, BLUE, GREEN], 1, p=[0.8, 0.1, 0.1])[0]
-                elif self.image[i, j] == BLUE:
-                    self.image[i, j] = np.random.choice([RED, BLUE, GREEN], 1, p=[0.1, 0.8, 0.1])[0]
-                else:
-                    self.image[i, j] = np.random.choice([RED, BLUE, GREEN], 1, p=[0.1, 0.1, 0.8])[0]
-                # self.image[i, j] = np.random.choice([RED, BLUE, GREEN], 1)[0]
+        self.noiser.simple_noise(self.image, self.num_colors, 0.2)
+
+    def p_x_cond_k(self, x, k):
+
+        if x == k:
+            return 1 - self.p_noise
+        return self.p_spec_noise
 
     def set_g(self, color1, color2, value, g_type):
 
@@ -142,15 +139,18 @@ class GibbsSamplingImageGenerator:
         return p
 
     def set_num_iterations(self, num_iter):
+
         self.num_iterations = num_iter
         print('Number iterations of generation: ', self.num_iterations)
 
     def set_image_size(self, size):
+
         self.image_width = self.image_height = size
         print('Image size: ', self.image_width)
         self.image = np.random.randint(0, self.num_colors, size=(self.image_width, self.image_height))
 
     def set_num_colors(self, num_colors):               # TODO possibly can be optimized
+
         self.num_colors = num_colors
         print("Number of colors:", self.num_colors)
         self.image = np.random.randint(0, self.num_colors, size=(self.image_width, self.image_height))
@@ -159,9 +159,11 @@ class GibbsSamplingImageGenerator:
         print(self.g_horizontal, self.g_vertical)
 
     def _check_coords(self, i, j):
+
         return (0 <= i < self.image_height) and (0 <= j < self.image_width)
 
     def execute_all_remaining(self):
+
         for i in range(self.current_iteration, self.num_iterations):
             self.iteration_of_generation()
 
@@ -177,48 +179,54 @@ class GibbsSamplingImageRecognizer:
         self.num_colors = sampler.num_colors
         self.image = sampler.image.copy()
         self.current_iteration = 0
+        self.noiser = sampler.noiser
 
     def set_num_iterations(self, num_iter):
+
         self.num_iterations = num_iter
         print('Number iterations of recognition: ', self.num_iterations)
 
     def set_image_size(self, size):
+
         self.image_width = self.image_height = size
-        # print('Image size: ', self.image_width)
         self.image = np.random.randint(0, self.num_colors, size=(self.image_width, self.image_height))
 
     def iteration_of_recognition(self):                     # TODO rewrite
-        # print(self.image)
-        RED, BLUE, GREEN = 0, 1, 2
-        COLORS = (RED, BLUE, GREEN)
+
+        COLORS = range(self.num_colors)
+
         for i in range(0, self.image_height):
             for j in range(0, self.image_width):
-                p_colors = []
+                p_colors = []                               # list of probabilities of colors
                 colors_interval = 0
-                for color in COLORS:
-                    if self.image[i, j] == color:
-                        p_cond = 0.8
-                    else:
-                        p_cond = 0.1
-                    p_color = self._get_color_prob(i, j, color) * p_cond   #the simplest possible noise is used
+                curr_color = self.image[i, j]
+                for color in COLORS:                        # Calculation of color's probability distribution
+                    p_color = self._get_color_prob(i, j, color) * self.noiser.p_x_cond_k('simple', curr_color, color)
                     p_colors.append(p_color)
                     colors_interval += p_color
-                rand_point = np.random.rand() * colors_interval
-                if rand_point <= p_colors[0]:
-                    self.image[i, j] = RED
-                elif rand_point > p_colors[0] and rand_point <= p_colors[0] + p_colors[1]:
-                    self.image[i, j] = BLUE
-                else:
-                    self.image[i, j] = GREEN
+                rand_point = np.random.uniform(0, colors_interval)  # choosing a color from calculated distribution
+                p_colors.append(0)                          # for next cycle to work
+
+                start_of_interval, end_of_interval = 0, p_colors[0]
+
+                for color in COLORS:
+                    if start_of_interval <= rand_point <= end_of_interval:
+                        self.image[i, j] = color
+                        break
+                    start_of_interval = end_of_interval
+                    end_of_interval += p_colors[color + 1]
 
         self.current_iteration += 1
 
     def _get_color_prob(self, i, j ,color):
+
         return GibbsSamplingImageGenerator._get_color_prob(self, i, j, color)
 
     def _check_coords(self, i, j):
+
         return GibbsSamplingImageGenerator._check_coords(self, i ,j)
 
     def execute_all_remaining(self):
+
         for i in range(self.current_iteration, self.num_iterations):
             self.iteration_of_recognition()
