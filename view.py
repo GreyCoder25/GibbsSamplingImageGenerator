@@ -48,6 +48,7 @@ class ImageGeneratorApp(tk.Tk):
         frame.tkraise()
 
     def save(self):
+
         with open('settings.pickle', 'wb') as f:
             for object_ in [self.sampler, self.recognizer]:
                 pickle.dump(object_, f)
@@ -130,6 +131,7 @@ class MainPage(tk.Frame):
         p = ax.pcolormesh(pix_vals, cmap=cmap)
 
     def reset(self):
+
         self.controller.sampler.reset()
         self.update_generated_image()
 
@@ -153,29 +155,34 @@ class MainPage(tk.Frame):
         self.canvas.draw()
 
     def show_noisy_image(self):
-        self.controller.sampler.noise()
-        self.controller.recognizer.image = self.controller.sampler.image
-        self.image_init(self.canvas.figure.axes[1])
-        self.image_init(self.canvas.figure.axes[2])
+
+        self.controller.recognizer.image = self.controller.sampler.noise()
+        self.image_init(self.canvas.figure.axes[1], 'rec')
+        self.image_init(self.canvas.figure.axes[2], 'rec')
         self.canvas.draw()
 
     def next_generating_iteration(self):
+
         self.controller.sampler.iteration_of_generation()
         self.update_generated_image()
 
     def next_recognition_iteration(self):
+
         self.controller.recognizer.iteration_of_recognition()
         self.update_recognized_image()
 
     def execute_all_gen_remaining(self):
+
         self.controller.sampler.execute_all_remaining()
         self.update_generated_image()
 
     def execute_all_rec_remaining(self):
+
         self.controller.recognizer.execute_all_remaining()
         self.update_recognized_image()
 
     def quit(self):
+
         self.controller.save()
         tk.Frame.quit(self)
 
@@ -198,6 +205,7 @@ class SettingsPage(tk.Frame):
         self.control_panel.pack(side="left", expand=True)
 
     def set_g(self, g_entries, g_type):
+
         i = 0
         for entries_row in g_entries:
             j = 0
@@ -207,7 +215,8 @@ class SettingsPage(tk.Frame):
                 j += 1
             i += 1
 
-    def set_num_colors(self, entry):      
+    def set_num_colors(self, entry):
+
         num_colors = int(entry.get())
         self.controller.sampler.set_num_colors(num_colors)
         self.control_panel.destroy()
@@ -217,16 +226,19 @@ class SettingsPage(tk.Frame):
         self.controller.frames[MainPage].update_generated_image()
 
     def set_num_iterations(self, object_, entry):
+
         num_iter = int(entry.get())
         object_.set_num_iterations(num_iter)
 
     def set_image_size(self, entry):
+
         size = int(entry.get())
         self.controller.sampler.set_image_size(size)
         self.controller.recognizer.set_image_size(size)
         self.controller.frames[MainPage].change_image_size(size)
 
     def control_panel_init(self, control_panel):
+
         num_colors = self.controller.sampler.num_colors
         num_gen_iterations = self.controller.sampler.num_iterations
         num_rec_iterations = self.controller.recognizer.num_iterations
@@ -288,6 +300,7 @@ class SettingsPage(tk.Frame):
         set_g_button.grid(row=2 * (num_colors + 3), column=2)
 
     def quit(self):
+
         self.controller.save()
         tk.Frame.quit(self)
 

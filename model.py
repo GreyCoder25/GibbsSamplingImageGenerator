@@ -71,7 +71,7 @@ class GibbsSamplingImageGenerator:
 
     def noise(self):
 
-        self.noiser.simple_noise(self.image, self.num_colors, 0.2)
+        return self.noiser.simple_noise(self.image, self.num_colors, 0.2)
 
     def p_x_cond_k(self, x, k):
 
