@@ -18,7 +18,6 @@ class Noiser:
                                                       [self.p_spec_noise for i in range(curr_color + 1, num_colors)])[0]
         return self.image
 
-
     def p_x_cond_k(self, noise_type, x, k):
 
         if noise_type == 'simple':

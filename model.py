@@ -39,6 +39,7 @@ class GibbsSamplingImageGenerator:
 
         """Performs one iteration of Gibbs sampling of the image."""
 
+        print("Generation iteration %d started" % self.current_iteration)
         COLORS = range(self.num_colors)
 
         for i in range(0, self.image_height):
@@ -46,7 +47,7 @@ class GibbsSamplingImageGenerator:
                 p_colors = []                               # list of probabilities of colors
                 colors_interval = 0
                 for color in COLORS:                        # Calculation of color's probability distribution
-                    p_color = self._get_color_prob(i, j, color)
+                    p_color = self.get_color_prob(i, j, color)
                     p_colors.append(p_color)
                     colors_interval += p_color
                 rand_point = np.random.uniform(0, colors_interval)      # choosing a color from calculated distribution
@@ -61,6 +62,8 @@ class GibbsSamplingImageGenerator:
                     start_of_interval = end_of_interval
                     end_of_interval += p_colors[color + 1]
 
+        print("Generation iteration %d finished" % self.current_iteration)
+
         self.current_iteration += 1
 
     def reset(self):
@@ -72,12 +75,6 @@ class GibbsSamplingImageGenerator:
     def noise(self):
 
         return self.noiser.simple_noise(self.image, self.num_colors, 0.2)
-
-    def p_x_cond_k(self, x, k):
-
-        if x == k:
-            return 1 - self.p_noise
-        return self.p_spec_noise
 
     def set_g(self, color1, color2, value, g_type):
 
@@ -108,7 +105,7 @@ class GibbsSamplingImageGenerator:
         elif g_type == "v":
             return self.g_vertical[color1, color2]
 
-    def _get_color_prob(self, i, j, color):
+    def get_color_prob(self, i, j, color):
 
         """Estimates the probability of given color to be real color of the pixel with given coordinates.
 
@@ -127,13 +124,13 @@ class GibbsSamplingImageGenerator:
         """
 
         p = 1
-        if self._check_coords(i, j - 1):
+        if self.check_coords(i, j - 1):
             p *= self.g_horizontal[self.image[i, j - 1], color]
-        if self._check_coords(i, j + 1):
+        if self.check_coords(i, j + 1):
             p *= self.g_horizontal[color, self.image[i, j + 1]]
-        if self._check_coords(i - 1, j):
+        if self.check_coords(i - 1, j):
             p *= self.g_vertical[self.image[i - 1, j], color]
-        if self._check_coords(i + 1, j):
+        if self.check_coords(i + 1, j):
             p *= self.g_vertical[color, self.image[i + 1, j]]
 
         return p
@@ -151,14 +148,15 @@ class GibbsSamplingImageGenerator:
 
     def set_num_colors(self, num_colors):               # TODO possibly can be optimized
 
-        self.num_colors = num_colors
-        print("Number of colors:", self.num_colors)
-        self.image = np.random.randint(0, self.num_colors, size=(self.image_width, self.image_height))
-        self.g_horizontal = np.ones((self.num_colors, self.num_colors))
-        self.g_vertical = np.ones((self.num_colors, self.num_colors))
-        print(self.g_horizontal, self.g_vertical)
+        if 1 < num_colors <= 8:
+            self.num_colors = num_colors
+            print("Number of colors:", self.num_colors)
+            self.image = np.random.randint(0, self.num_colors, size=(self.image_width, self.image_height))
+            self.g_horizontal = np.ones((self.num_colors, self.num_colors))
+            self.g_vertical = np.ones((self.num_colors, self.num_colors))
+            # print(self.g_horizontal, self.g_vertical)
 
-    def _check_coords(self, i, j):
+    def check_coords(self, i, j):
 
         return (0 <= i < self.image_height) and (0 <= j < self.image_width)
 
@@ -191,7 +189,7 @@ class GibbsSamplingImageRecognizer:
         self.image_width = self.image_height = size
         self.image = np.random.randint(0, self.num_colors, size=(self.image_width, self.image_height))
 
-    def iteration_of_recognition(self):                     # TODO rewrite
+    def iteration_of_recognition(self):
 
         COLORS = range(self.num_colors)
 
@@ -201,7 +199,7 @@ class GibbsSamplingImageRecognizer:
                 colors_interval = 0
                 curr_color = self.image[i, j]
                 for color in COLORS:                        # Calculation of color's probability distribution
-                    p_color = self._get_color_prob(i, j, color) * self.noiser.p_x_cond_k('simple', curr_color, color)
+                    p_color = self.get_color_prob(i, j, color) * self.noiser.p_x_cond_k('simple', curr_color, color)
                     p_colors.append(p_color)
                     colors_interval += p_color
                 rand_point = np.random.uniform(0, colors_interval)  # choosing a color from calculated distribution
@@ -218,13 +216,42 @@ class GibbsSamplingImageRecognizer:
 
         self.current_iteration += 1
 
-    def _get_color_prob(self, i, j ,color):
+    def iteration_of_line_recognition(self):
 
-        return GibbsSamplingImageGenerator._get_color_prob(self, i, j, color)
+        def q1(k, i, j):
 
-    def _check_coords(self, i, j):
+            res = self.noiser.p_x_cond_k('simple', self.image[i, j], k)
+            if self.check_coords(i - 1, j):
+                res *= self.g_vertical(self.image[i - 1, j], k)
+            if self.check_coords(i + 1, j):
+                res *= self.g_vertical(k, self.image[i + 1, j])
 
-        return GibbsSamplingImageGenerator._check_coords(self, i ,j)
+        def generate_k0():
+            pass
+
+        for i in range(self.image_height):
+
+            f_left = np.ones((self.num_colors, self.image_width))
+            for j in range(2, self.image_width):
+                f_left[:, j] = np.dot(f_left[:, j - 1], self.g_horizontal)
+
+            f_right = np.ones((self.num_colors, self.image_width))
+            for j in range(self.image_width - 2, -1, -1):
+                f_right[:, j] = np.dot(self.g_horizontal, f_right[:, j + 1])
+
+            # self.image[i, 0] =
+
+    def get_color_prob(self, i, j ,color):
+
+        return GibbsSamplingImageGenerator.get_color_prob(self, i, j, color)
+
+    def get_pair_prob(self, j1, j2, color1, color2):
+
+        pass
+
+    def check_coords(self, i, j):
+
+        return GibbsSamplingImageGenerator.check_coords(self, i, j)
 
     def execute_all_remaining(self):
 

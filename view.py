@@ -163,8 +163,10 @@ class MainPage(tk.Frame):
 
     def next_generating_iteration(self):
 
-        self.controller.sampler.iteration_of_generation()
-        self.update_generated_image()
+        for i in range(20):
+            for j in range(1):
+                self.controller.sampler.iteration_of_generation()
+            self.update_generated_image()
 
     def next_recognition_iteration(self):
 
