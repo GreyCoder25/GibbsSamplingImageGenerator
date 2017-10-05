@@ -218,7 +218,7 @@ class GibbsSamplingImageRecognizer:
 
     def iteration_of_line_recognition(self):
 
-        def q1(k, i, j):
+        def q1(i, j, k):
 
             res = self.noiser.p_x_cond_k('simple', self.image[i, j], k)
             if self.check_coords(i - 1, j):
@@ -226,9 +226,27 @@ class GibbsSamplingImageRecognizer:
             if self.check_coords(i + 1, j):
                 res *= self.g_vertical(k, self.image[i + 1, j])
 
-        def generate_k0():
-            pass
+        def p_k1_k2(i, j1, j2, k1, k2, f_left, f_right, q1):
 
+            return f_left[k1, j1] * q1(i, j1, k1) * self.g_horizontal[k1, k2] * q1(i, j2, k2) * f_right[k2, j2]
+
+        def generate_k0(row, f_left, f_right, q1):
+
+            P = np.empty((self.num_colors, self.num_colors))
+            for i in range(self.num_colors):
+                for j in range(self.num_colors):
+                    P[i, j] = p_k1_k2(row, 0, 1, i, j, f_left, f_right, q1)
+
+            P = P.sum(axis=1)
+            rand_point = np.random.uniform(0, P.sum())
+            interval_begin, interval_end = 0, P[0]
+            for i in range(self.num_colors):
+                if interval_begin <= rand_point <= interval_end:
+                    return i
+                interval_begin += P[i]
+                interval_end += P[i+1]
+
+        # function body begins here
         for i in range(self.image_height):
 
             f_left = np.ones((self.num_colors, self.image_width))
@@ -239,15 +257,31 @@ class GibbsSamplingImageRecognizer:
             for j in range(self.image_width - 2, -1, -1):
                 f_right[:, j] = np.dot(self.g_horizontal, f_right[:, j + 1])
 
-            # self.image[i, 0] =
+            self.image[i, 0] = generate_k0(i, f_left, f_right, q1)
 
-    def get_color_prob(self, i, j ,color):
+            for j in range(1, self.image_width):
+                p_labels = []
+                prev_label = self.image[i, j-1]
+                for label in range(self.num_colors):
+                    p_label = p_k1_k2(i, j-1, j, prev_label, label, f_left, f_right, q1)
+                    p_labels.append(p_label)
+
+                p_prev_label = sum(p_labels)
+                for label_index in range(len(p_labels)):
+                    p_labels[label_index] /= p_prev_label
+
+                rand_point = np.random.uniform(0, sum(p_labels))
+                interval_begin, interval_end = 0, p_labels[0]
+                for label in range(self.num_colors):
+                    if interval_begin <= rand_point <= interval_end:
+                        self.image[i, j] = label
+                        break
+                    interval_begin += p_labels[label]
+                    interval_end += p_labels[label + 1]
+
+    def get_color_prob(self, i, j, color):
 
         return GibbsSamplingImageGenerator.get_color_prob(self, i, j, color)
-
-    def get_pair_prob(self, j1, j2, color1, color2):
-
-        pass
 
     def check_coords(self, i, j):
 
