@@ -170,7 +170,8 @@ class MainPage(tk.Frame):
 
     def next_recognition_iteration(self):
 
-        self.controller.recognizer.iteration_of_recognition()
+        # self.controller.recognizer.iteration_of_recognition()
+        self.controller.recognizer.iteration_of_line_recognition()
         self.update_recognized_image()
 
     def execute_all_gen_remaining(self):

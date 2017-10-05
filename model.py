@@ -222,9 +222,11 @@ class GibbsSamplingImageRecognizer:
 
             res = self.noiser.p_x_cond_k('simple', self.image[i, j], k)
             if self.check_coords(i - 1, j):
-                res *= self.g_vertical(self.image[i - 1, j], k)
+                res *= self.g_vertical[self.image[i - 1, j], k]
             if self.check_coords(i + 1, j):
-                res *= self.g_vertical(k, self.image[i + 1, j])
+                res *= self.g_vertical[k, self.image[i + 1, j]]
+
+            return res
 
         def p_k1_k2(i, j1, j2, k1, k2, f_left, f_right, q1):
 
