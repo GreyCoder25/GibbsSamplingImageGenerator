@@ -25,7 +25,6 @@ class GibbsSamplingImageGenerator:
             Specifies number of iterations of Gibbs sampler for image generating.
         """
 
-        self.noiser = noise.Noiser()
         self.image_width = image_width
         self.image_height = image_height
         self.num_colors = num_colors
@@ -68,13 +67,13 @@ class GibbsSamplingImageGenerator:
 
     def reset(self):
 
-        """Resets the generated image."""
+        """Resets the generated image by generating new random image."""
         self.image = np.random.randint(0, self.num_colors, size=(self.image_height, self.image_width))
         self.current_iteration = 0
-
-    def noise(self):
-
-        return self.noiser.simple_noise(self.image, self.num_colors, 0.2)
+    #
+    # def noise(self, noiser):
+    #
+    #     return noiser.simple_noise(self.image, self.num_colors, 0.2)
 
     def set_g(self, color1, color2, value, g_type):
 
@@ -168,16 +167,22 @@ class GibbsSamplingImageGenerator:
 
 class GibbsSamplingImageRecognizer:
 
-    def __init__(self, sampler, num_iterations=1000):
+    def __init__(self, sampler, noiser, num_iterations=1000):
         self.num_iterations = num_iterations
         self.image_width = sampler.image_width
         self.image_height = sampler.image_height
         self.g_horizontal = sampler.g_horizontal
         self.g_vertical = sampler.g_vertical
         self.num_colors = sampler.num_colors
-        self.image = sampler.image.copy()
+        self.image = np.empty_like(sampler.image)
+        self.initial_image = self.image.copy()
         self.current_iteration = 0
-        self.noiser = sampler.noiser
+        self.noiser = noiser
+
+    def set_image(self, image):
+
+        self.image = image.copy()
+        self.initial_image = image.copy()
 
     def set_num_iterations(self, num_iter):
 
@@ -187,7 +192,7 @@ class GibbsSamplingImageRecognizer:
     def set_image_size(self, size):
 
         self.image_width = self.image_height = size
-        self.image = np.random.randint(0, self.num_colors, size=(self.image_width, self.image_height))
+        self.set_image(np.random.randint(0, self.num_colors, size=(self.image_width, self.image_height)))
 
     def iteration_of_recognition(self):
 
@@ -281,6 +286,8 @@ class GibbsSamplingImageRecognizer:
                     interval_begin += p_labels[label]
                     interval_end += p_labels[label + 1]
 
+        self.current_iteration += 1
+
     def get_color_prob(self, i, j, color):
 
         return GibbsSamplingImageGenerator.get_color_prob(self, i, j, color)
@@ -289,7 +296,13 @@ class GibbsSamplingImageRecognizer:
 
         return GibbsSamplingImageGenerator.check_coords(self, i, j)
 
+    def reset(self):
+
+        self.image = self.initial_image.copy()
+        self.current_iteration = 0
+
     def execute_all_remaining(self):
 
         for i in range(self.current_iteration, self.num_iterations):
-            self.iteration_of_recognition()
+            self.iteration_of_line_recognition()
+            # self.iteration_of_recognition()

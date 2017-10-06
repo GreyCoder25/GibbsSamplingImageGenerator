@@ -3,8 +3,11 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 import model
+import noise
 import tkinter as tk
 import pickle
+
+import numpy as np
 
 mpl.use("TkAgg")
 
@@ -30,10 +33,12 @@ class ImageGeneratorApp(tk.Tk):
         try:
             with open('settings.pickle', 'rb') as f:
                 self.sampler = pickle.load(f)
+                self.noiser = pickle.load(f)
                 self.recognizer = pickle.load(f)
         except FileNotFoundError:
             self.sampler = model.GibbsSamplingImageGenerator()
-            self.recognizer = model.GibbsSamplingImageRecognizer(self.sampler)
+            self.noiser = noise.Noiser()
+            self.recognizer = model.GibbsSamplingImageRecognizer(self.sampler, self.noiser)
 
         for F in (MainPage, SettingsPage):
             frame = F(container, self)
@@ -50,7 +55,7 @@ class ImageGeneratorApp(tk.Tk):
     def save(self):
 
         with open('settings.pickle', 'wb') as f:
-            for object_ in [self.sampler, self.recognizer]:
+            for object_ in [self.sampler, self.noiser, self.recognizer]:
                 pickle.dump(object_, f)
 
 
@@ -78,7 +83,10 @@ class MainPage(tk.Frame):
         quit_button = tk.Button(self, text="Quit", command=self.quit)
         quit_button.grid(row=0, column=self.num_columns-1)
 
-        reset_button = tk.Button(self, text="Reset", command=self.reset)
+        reset_button = tk.Button(self, text="Reset generation", command=self.reset_generation)
+        reset_button.grid(row=0, column=self.num_columns - 4)
+
+        reset_button = tk.Button(self, text="Reset recognition", command=self.reset_recognition)
         reset_button.grid(row=0, column=self.num_columns - 3)
 
         # buttons for generated image graph
@@ -130,10 +138,15 @@ class MainPage(tk.Frame):
         cmap = mpl.colors.ListedColormap(COLORS[:self.controller.sampler.num_colors])
         p = ax.pcolormesh(pix_vals, cmap=cmap)
 
-    def reset(self):
+    def reset_generation(self):
 
         self.controller.sampler.reset()
         self.update_generated_image()
+
+    def reset_recognition(self):
+
+        self.controller.recognizer.reset()
+        self.update_recognized_image()
 
     def change_image_size(self, size):
 
@@ -156,17 +169,19 @@ class MainPage(tk.Frame):
 
     def show_noisy_image(self):
 
-        self.controller.recognizer.image = self.controller.sampler.noise()
+        self.controller.recognizer.set_image(self.controller.noiser.simple_noise(self.controller.sampler.image,
+                                                                               self.controller.recognizer.num_colors, 0.2))
+        # self.controller.recognizer.initial_image = self.controller.recognizer.image.copy()
         self.image_init(self.canvas.figure.axes[1], 'rec')
         self.image_init(self.canvas.figure.axes[2], 'rec')
         self.canvas.draw()
 
     def next_generating_iteration(self):
 
-        for i in range(20):
-            for j in range(1):
-                self.controller.sampler.iteration_of_generation()
-            self.update_generated_image()
+            # for i in range(20):
+            #     for j in range(1):
+        self.controller.sampler.iteration_of_generation()
+        self.update_generated_image()
 
     def next_recognition_iteration(self):
 
