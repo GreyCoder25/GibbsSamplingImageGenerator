@@ -236,6 +236,7 @@ class GibbsSamplingImageRecognizer:
         def p_k1_k2(i, j1, j2, k1, k2, f_left, f_right, q1):
 
             return f_left[k1, j1] * q1(i, j1, k1) * self.g_horizontal[k1, k2] * q1(i, j2, k2) * f_right[k2, j2]
+            # return f_left[k1, j1] * self.g_horizontal[k1, k2] * f_right[k2, j2]
 
         def generate_k0(row, f_left, f_right, q1):
 
@@ -253,16 +254,21 @@ class GibbsSamplingImageRecognizer:
                 interval_begin += P[i]
                 interval_end += P[i+1]
 
+        # print(np.vectorize(q1)(0, 1, np.arange(self.num_colors)))
         # function body begins here
         for i in range(self.image_height):
 
             f_left = np.ones((self.num_colors, self.image_width))
             for j in range(2, self.image_width):
-                f_left[:, j] = np.dot(f_left[:, j - 1], self.g_horizontal)
+                f_left[:, j] = np.dot(f_left[:, j - 1], self.g_horizontal *
+                                      np.vectorize(q1)(i, j-1, np.arange(self.num_colors)).reshape(self.num_colors, 1))
+                f_left[:, j] = f_left[:, j] / 300
 
             f_right = np.ones((self.num_colors, self.image_width))
             for j in range(self.image_width - 2, -1, -1):
-                f_right[:, j] = np.dot(self.g_horizontal, f_right[:, j + 1])
+                f_right[:, j] = np.dot(self.g_horizontal * np.vectorize(q1)(i, j+1, np.arange(self.num_colors)),
+                                       f_right[:, j + 1])
+                f_right[:, j] = f_right[:, j] / 300
 
             self.image[i, 0] = generate_k0(i, f_left, f_right, q1)
 
