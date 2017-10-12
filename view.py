@@ -40,7 +40,7 @@ class ImageGeneratorApp(tk.Tk):
             self.noiser = noise.Noiser()
             self.recognizer = model.GibbsSamplingImageRecognizer(self.sampler, self.noiser)
 
-        for F in (MainPage, SettingsPage):
+        for F in (MainPage, SettingsPage, GraphPage):
             frame = F(container, self)
             self.frames[F] = frame
             frame.grid(row=0, column=0, sticky="nsew")
@@ -67,7 +67,7 @@ class MainPage(tk.Frame):
         self.controller = controller
 
         self.num_rows = 3
-        self.num_columns = 5
+        self.num_columns = 6
         for r in range(self.num_rows):
             self.grid_rowconfigure(r, weight=1)
             for c in range(self.num_columns):
@@ -84,10 +84,16 @@ class MainPage(tk.Frame):
         quit_button.grid(row=0, column=self.num_columns-1)
 
         reset_button = tk.Button(self, text="Reset generation", command=self.reset_generation)
-        reset_button.grid(row=0, column=self.num_columns - 4)
+        reset_button.grid(row=0, column=self.num_columns - 6)
 
         reset_button = tk.Button(self, text="Reset recognition", command=self.reset_recognition)
         reset_button.grid(row=0, column=self.num_columns - 3)
+
+        show_graph_button = tk.Button(self, text="Test and show graph", command=self.test_and_show_graph)
+        show_graph_button.grid(row=0, column=self.num_columns - 5)
+
+        graph_button = tk.Button(self, text="Graph", command=self.show_graph_page)
+        graph_button.grid(row=0, column=self.num_columns - 4)
 
         # buttons for generated image graph
         tk.Button(self, text="Next iteration", command=self.next_generating_iteration).grid(row=2,
@@ -99,10 +105,11 @@ class MainPage(tk.Frame):
         tk.Button(self, text="Noise", command=self.show_noisy_image).grid(row=2, column=2, sticky="nsew")
 
         # buttons for recognized image graph
-        tk.Button(self, text="Next iteration", command=self.next_recognition_iteration).grid(row=2, column=3,
-                                                                                                                 sticky="nsew")
-        tk.Button(self, text="Execute all remaining", command=self.execute_all_rec_remaining).grid(row=2,
-                                                                                                        column=4, sticky="nsew")
+        tk.Button(self, text="Next pixelwise iteration", command=self.next_pixelwise_recognition_iteration).grid(row=2, column=3,
+                                                                                             sticky="nsew")
+
+        tk.Button(self, text="Next line iteration", command=self.next_line_recognition_iteration).grid(row=2,
+                                                                                                   column=4, sticky="nsew")
         # show image graphs
         self.figure = self.image_graphs_init()
         self.canvas = FigureCanvasTkAgg(self.figure, self)
@@ -136,7 +143,7 @@ class MainPage(tk.Frame):
         elif pix_vals_type == 'rec':
             pix_vals = self.controller.recognizer.image
         cmap = mpl.colors.ListedColormap(COLORS[:self.controller.sampler.num_colors])
-        p = ax.pcolormesh(pix_vals, cmap=cmap)
+        ax.pcolormesh(pix_vals, cmap=cmap)
 
     def reset_generation(self):
 
@@ -183,9 +190,13 @@ class MainPage(tk.Frame):
         self.controller.sampler.iteration_of_generation()
         self.update_generated_image()
 
-    def next_recognition_iteration(self):
+    def next_pixelwise_recognition_iteration(self):
 
-        # self.controller.recognizer.iteration_of_recognition()
+        self.controller.recognizer.iteration_of_recognition()
+        self.update_recognized_image()
+
+    def next_line_recognition_iteration(self):
+
         self.controller.recognizer.iteration_of_line_recognition()
         self.update_recognized_image()
 
@@ -194,10 +205,36 @@ class MainPage(tk.Frame):
         self.controller.sampler.execute_all_remaining()
         self.update_generated_image()
 
-    def execute_all_rec_remaining(self):
+    def test_and_show_graph(self):
 
-        self.controller.recognizer.execute_all_remaining()
-        self.update_recognized_image()
+        num_iterations = self.controller.recognizer.num_iterations
+        recognizer = self.controller.recognizer
+        sampler = self.controller.sampler
+
+        pixelwise = np.empty(num_iterations)
+        line = np.empty(num_iterations)
+
+        for i in range(num_iterations):
+            recognizer.iteration_of_recognition()
+            pixelwise[i] = (sampler.image != recognizer.image).sum()
+        recognizer.reset()
+
+        for i in range(num_iterations):
+            recognizer.iteration_of_line_recognition()
+            line[i] = (sampler.image != recognizer.image).sum()
+
+        graph_page = self.controller.frames[GraphPage]
+        graph_page.get_data(pixelwise, line)
+        self.show_graph_page()
+
+    def show_graph_page(self):
+
+        self.controller.show_frame(GraphPage)
+
+    # def execute_all_rec_remaining(self):
+    #
+    #     self.controller.recognizer.execute_all_remaining()
+    #     self.update_recognized_image()
 
     def quit(self):
 
@@ -322,5 +359,60 @@ class SettingsPage(tk.Frame):
         self.controller.save()
         tk.Frame.quit(self)
 
+
+class GraphPage(tk.Frame):
+
+    def __init__(self, parent, controller):
+
+        tk.Frame.__init__(self, parent)
+        self.controller = controller
+        self.graph_names = ["Pixelwise Gibbs sampler", "Line Gibbs sampler", "Min-cut"]
+        self.graph_styles = ['r-', 'b-', 'g-']
+        self.data_lists = []
+
+        main_page_button = tk.Button(self, text="Main page", command=lambda: controller.show_frame(MainPage))
+        main_page_button.pack(side="right", expand=True)
+
+        self.figure = self.axes_init()
+        self.canvas = FigureCanvasTkAgg(self.figure, self)
+        self.canvas.show()
+        self.canvas.get_tk_widget().pack()
+
+    def get_data(self, *data_lists):
+
+        print("Data lists: ", data_lists)
+        self.data_lists = data_lists
+        self.graph_update()
+
+    def axes_init(self):
+        Y_LIMIT = 1000
+        X_LIMIT = 20
+
+        fig, ax = plt.subplots(figsize=(10, 3), nrows=1, ncols=1)
+        ax.set_ylim(0, Y_LIMIT)
+        ax.set_xlim(0, X_LIMIT)
+        ax.set_xticks(np.arange(X_LIMIT))
+        self.set_graph(ax)
+
+        return fig
+
+    def set_graph(self, ax):
+        ax.cla()
+        args = []
+        kvargs = {}
+        for index, data in enumerate(self.data_lists):
+            args.append(data)
+            args.append(self.graph_styles[index])
+            kvargs['label'] = self.graph_names[index]
+            ax.plot(*args, **kvargs)
+            args = []
+            kvargs = {}
+
+        ax.legend(loc=1)
+
+    def graph_update(self):
+
+        self.set_graph(self.canvas.figure.axes[0])
+        self.canvas.draw()
 
 

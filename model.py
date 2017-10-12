@@ -307,8 +307,12 @@ class GibbsSamplingImageRecognizer:
         self.image = self.initial_image.copy()
         self.current_iteration = 0
 
-    def execute_all_remaining(self):
+    def execute_all_remaining(self, rec_type):
+
+        if rec_type == 'pixelwise':
+            iteration = self.iteration_of_recognition
+        elif rec_type == 'line':
+            iteration = self.iteration_of_line_recognition
 
         for i in range(self.current_iteration, self.num_iterations):
-            self.iteration_of_line_recognition()
-            # self.iteration_of_recognition()
+            iteration()
