@@ -6,6 +6,7 @@ import model
 import noise
 import tkinter as tk
 import pickle
+import time
 
 import numpy as np
 
@@ -177,8 +178,7 @@ class MainPage(tk.Frame):
     def show_noisy_image(self):
 
         self.controller.recognizer.set_image(self.controller.noiser.simple_noise(self.controller.sampler.image,
-                                                                               self.controller.recognizer.num_colors, 0.2))
-        # self.controller.recognizer.initial_image = self.controller.recognizer.image.copy()
+                                                                                 self.controller.recognizer.num_colors, 0.49))
         self.image_init(self.canvas.figure.axes[1], 'rec')
         self.image_init(self.canvas.figure.axes[2], 'rec')
         self.canvas.draw()
@@ -211,20 +211,41 @@ class MainPage(tk.Frame):
         recognizer = self.controller.recognizer
         sampler = self.controller.sampler
 
-        pixelwise = np.empty(num_iterations)
-        line = np.empty(num_iterations)
+        pixelwise = np.empty(num_iterations + 1)
+        pixelwise[0] = (sampler.image != recognizer.image).sum()
+        line = np.empty(num_iterations + 1)
+        line[0] = pixelwise[0]
 
-        for i in range(num_iterations):
+        pixelwise_total_time = 0
+        line_total_time = 0
+
+        for i in range(1, num_iterations + 1):
+            start = time.time()
             recognizer.iteration_of_recognition()
+            finish = time.time()
+            print('Time of pixelwise perfoming iteration %d: %f' % (i, finish - start))
+            pixelwise_total_time += finish - start
             pixelwise[i] = (sampler.image != recognizer.image).sum()
         recognizer.reset()
 
-        for i in range(num_iterations):
+        pixelwise_average_time = pixelwise_total_time / num_iterations
+        print("Pixelwise average time: %f" % pixelwise_average_time)
+
+        for i in range(1, num_iterations + 1):
+            start = time.time()
             recognizer.iteration_of_line_recognition()
+            finish = time.time()
+            print('Time of pixelwise perfoming iteration %d: %f' % (i, finish - start))
+            line_total_time += finish - start
             line[i] = (sampler.image != recognizer.image).sum()
 
+        line_average_time = line_total_time / num_iterations
+        print("Line average time: %f" % line_average_time)
+
+        average_times = (pixelwise_average_time, line_average_time)
+
         graph_page = self.controller.frames[GraphPage]
-        graph_page.get_data(pixelwise, line)
+        graph_page.get_data(average_times, pixelwise, line)
         self.show_graph_page()
 
     def show_graph_page(self):
@@ -378,13 +399,15 @@ class GraphPage(tk.Frame):
         self.canvas.show()
         self.canvas.get_tk_widget().pack()
 
-    def get_data(self, *data_lists):
+    def get_data(self, average_times, *data_lists):
 
         print("Data lists: ", data_lists)
+        self.average_times = average_times
         self.data_lists = data_lists
         self.graph_update()
 
     def axes_init(self):
+
         Y_LIMIT = 1000
         X_LIMIT = 20
 
@@ -401,6 +424,7 @@ class GraphPage(tk.Frame):
         args = []
         kvargs = {}
         for index, data in enumerate(self.data_lists):
+            args.append(np.arange(len(data)) * self.average_times[index])
             args.append(data)
             args.append(self.graph_styles[index])
             kvargs['label'] = self.graph_names[index]

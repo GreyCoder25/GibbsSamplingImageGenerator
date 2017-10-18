@@ -168,6 +168,7 @@ class GibbsSamplingImageGenerator:
 class GibbsSamplingImageRecognizer:
 
     def __init__(self, sampler, noiser, num_iterations=1000):
+
         self.num_iterations = num_iterations
         self.image_width = sampler.image_width
         self.image_height = sampler.image_height
