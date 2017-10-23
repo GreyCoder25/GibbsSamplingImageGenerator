@@ -126,7 +126,9 @@ class GibbsSamplingImageGenerator:
         if self.check_coords(i, j - 1):
             p *= self.g_horizontal[self.image[i, j - 1], color]
         if self.check_coords(i, j + 1):
-            p *= self.g_horizontal[color, self.image[i, j + 1]]
+            p *= self.g_horizontal[color,
+                                   self.image[i,
+                                              j + 1]]
         if self.check_coords(i - 1, j):
             p *= self.g_vertical[self.image[i - 1, j], color]
         if self.check_coords(i + 1, j):
@@ -139,11 +141,15 @@ class GibbsSamplingImageGenerator:
         self.num_iterations = num_iter
         print('Number iterations of generation: ', self.num_iterations)
 
-    def set_image_size(self, size):
+    def set_image_height(self, height):
 
-        self.image_width = self.image_height = size
-        print('Image size: ', self.image_width)
-        self.image = np.random.randint(0, self.num_colors, size=(self.image_width, self.image_height))
+        self.image_height = height
+        self.image = np.random.randint(0, self.num_colors, size=(self.image_height, self.image_width))
+
+    def set_image_width(self, width):
+
+        self.image_width = width
+        self.image = np.random.randint(0, self.num_colors, size=(self.image_height, self.image_width))
 
     def set_num_colors(self, num_colors):               # TODO possibly can be optimized
 
@@ -157,6 +163,7 @@ class GibbsSamplingImageGenerator:
 
     def check_coords(self, i, j):
 
+        # print('Checking (0 <= %d < %d) and (0 <= %d < %d)' % (i, self.image_height, j, self.image_width))
         return (0 <= i < self.image_height) and (0 <= j < self.image_width)
 
     def execute_all_remaining(self):
@@ -185,15 +192,27 @@ class GibbsSamplingImageRecognizer:
         self.image = image.copy()
         self.initial_image = image.copy()
 
+    def set_num_colors(self, num_colors):
+
+        if 1 <= num_colors <= 8:
+            self.num_colors = num_colors
+            self.g_horizontal = np.ones((self.num_colors, self.num_colors))
+            self.g_vertical = np.ones((self.num_colors, self.num_colors))
+
     def set_num_iterations(self, num_iter):
 
         self.num_iterations = num_iter
         print('Number iterations of recognition: ', self.num_iterations)
 
-    def set_image_size(self, size):
+    def set_image_height(self, height):
 
-        self.image_width = self.image_height = size
-        self.set_image(np.random.randint(0, self.num_colors, size=(self.image_width, self.image_height)))
+        GibbsSamplingImageGenerator.set_image_height(self, height)
+        self.initial_image = self.image.copy()
+
+    def set_image_width(self, width):
+
+        GibbsSamplingImageGenerator.set_image_width(self, width)
+        self.initial_image = self.image.copy()
 
     def iteration_of_recognition(self):
 
@@ -203,7 +222,7 @@ class GibbsSamplingImageRecognizer:
             for j in range(0, self.image_width):
                 p_colors = []                               # list of probabilities of colors
                 colors_interval = 0
-                curr_color = self.image[i, j]
+                curr_color = self.initial_image[i, j]
                 for color in COLORS:                        # Calculation of color's probability distribution
                     p_color = self.get_color_prob(i, j, color) * self.noiser.p_x_cond_k('simple', curr_color, color)
                     p_colors.append(p_color)
@@ -226,7 +245,7 @@ class GibbsSamplingImageRecognizer:
 
         def q1(i, j, k):
 
-            res = self.noiser.p_x_cond_k('simple', self.image[i, j], k)
+            res = self.noiser.p_x_cond_k('simple', self.initial_image[i, j], k)
             if self.check_coords(i - 1, j):
                 res *= self.g_vertical[self.image[i - 1, j], k]
             if self.check_coords(i + 1, j):
@@ -236,6 +255,7 @@ class GibbsSamplingImageRecognizer:
 
         def p_k1_k2(i, j1, j2, k1, k2, f_left, f_right, q1):
 
+            # print(f_left[k1, j1] * q1(i, j1, k1) * self.g_horizontal[k1, k2] * q1(i, j2, k2) * f_right[k2, j2])
             return f_left[k1, j1] * q1(i, j1, k1) * self.g_horizontal[k1, k2] * q1(i, j2, k2) * f_right[k2, j2]
             # return f_left[k1, j1] * self.g_horizontal[k1, k2] * f_right[k2, j2]
 
@@ -263,13 +283,14 @@ class GibbsSamplingImageRecognizer:
             for j in range(2, self.image_width):
                 f_left[:, j] = np.dot(f_left[:, j - 1], self.g_horizontal *
                                       np.vectorize(q1)(i, j-1, np.arange(self.num_colors)).reshape(self.num_colors, 1))
-                f_left[:, j] = f_left[:, j] / 300
+                f_left[:, j] = f_left[:, j] / 100
+                # print(f_left[:, j])
 
             f_right = np.ones((self.num_colors, self.image_width))
             for j in range(self.image_width - 2, -1, -1):
                 f_right[:, j] = np.dot(self.g_horizontal * np.vectorize(q1)(i, j+1, np.arange(self.num_colors)),
                                        f_right[:, j + 1])
-                f_right[:, j] = f_right[:, j] / 300
+                f_right[:, j] = f_right[:, j] / 100
 
             self.image[i, 0] = generate_k0(i, f_left, f_right, q1)
 
@@ -280,10 +301,12 @@ class GibbsSamplingImageRecognizer:
                     p_label = p_k1_k2(i, j-1, j, prev_label, label, f_left, f_right, q1)
                     p_labels.append(p_label)
 
+                # print(p_labels)
                 p_prev_label = sum(p_labels)
                 for label_index in range(len(p_labels)):
                     p_labels[label_index] /= p_prev_label
 
+                # print(sum(p_labels))
                 rand_point = np.random.uniform(0, sum(p_labels))
                 interval_begin, interval_end = 0, p_labels[0]
                 for label in range(self.num_colors):
@@ -317,3 +340,7 @@ class GibbsSamplingImageRecognizer:
 
         for i in range(self.current_iteration, self.num_iterations):
             iteration()
+
+    def set_g(self, color1, color2, value, g_type):
+
+        GibbsSamplingImageGenerator.set_g(self, color1, color2, value, g_type)

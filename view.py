@@ -156,12 +156,15 @@ class MainPage(tk.Frame):
         self.controller.recognizer.reset()
         self.update_recognized_image()
 
-    def change_image_size(self, size):
+    def change_image_size(self, size, param):
 
         for ax in self.canvas.figure.axes:
-            ax.set_ylim(size, 0)
-            ax.set_xlim(0, size)
+            if param == 'h':
+                ax.set_ylim(size, 0)
+            elif param == 'w':
+                ax.set_xlim(0, size)
 
+        self.image_graphs_init()
         self.image_init(self.canvas.figure.axes[0])
         self.canvas.draw()
 
@@ -179,6 +182,7 @@ class MainPage(tk.Frame):
 
         self.controller.recognizer.set_image(self.controller.noiser.simple_noise(self.controller.sampler.image,
                                                                                  self.controller.recognizer.num_colors, 0.49))
+        print(self.controller.noiser.image.shape)
         self.image_init(self.canvas.figure.axes[1], 'rec')
         self.image_init(self.canvas.figure.axes[2], 'rec')
         self.canvas.draw()
@@ -197,6 +201,7 @@ class MainPage(tk.Frame):
 
     def next_line_recognition_iteration(self):
 
+        # for i in range(1000):
         self.controller.recognizer.iteration_of_line_recognition()
         self.update_recognized_image()
 
@@ -209,6 +214,7 @@ class MainPage(tk.Frame):
 
         num_iterations = self.controller.recognizer.num_iterations
         recognizer = self.controller.recognizer
+        recognizer.reset()
         sampler = self.controller.sampler
 
         pixelwise = np.empty(num_iterations + 1)
@@ -235,9 +241,10 @@ class MainPage(tk.Frame):
             start = time.time()
             recognizer.iteration_of_line_recognition()
             finish = time.time()
-            print('Time of pixelwise perfoming iteration %d: %f' % (i, finish - start))
+            print('Time of line perfoming iteration %d: %f' % (i, finish - start))
             line_total_time += finish - start
             line[i] = (sampler.image != recognizer.image).sum()
+        recognizer.reset()
 
         line_average_time = line_total_time / num_iterations
         print("Line average time: %f" % line_average_time)
@@ -288,6 +295,7 @@ class SettingsPage(tk.Frame):
             for g in entries_row:
                 value = float(g.get())
                 self.controller.sampler.set_g(i, j, value, g_type)
+                self.controller.recognizer.set_g(i, j, value, g_type)
                 j += 1
             i += 1
 
@@ -295,6 +303,7 @@ class SettingsPage(tk.Frame):
 
         num_colors = int(entry.get())
         self.controller.sampler.set_num_colors(num_colors)
+        self.controller.recognizer.set_num_colors(num_colors)
         self.control_panel.destroy()
         self.control_panel = tk.Frame(self)
         self.control_panel_init(self.control_panel)
@@ -306,25 +315,36 @@ class SettingsPage(tk.Frame):
         num_iter = int(entry.get())
         object_.set_num_iterations(num_iter)
 
-    def set_image_size(self, entry):
+    def set_image_height(self, entry):
 
-        size = int(entry.get())
-        self.controller.sampler.set_image_size(size)
-        self.controller.recognizer.set_image_size(size)
-        self.controller.frames[MainPage].change_image_size(size)
+        height = int(entry.get())
+        self.controller.sampler.set_image_height(height)
+        self.controller.recognizer.set_image_height(height)
+        self.controller.frames[MainPage].change_image_size(height, 'h')
+        print('Image height: %d' % height)
+
+    def set_image_width(self, entry):
+
+        width = int(entry.get())
+        self.controller.sampler.set_image_width(width)
+        self.controller.recognizer.set_image_width(width)
+        self.controller.frames[MainPage].change_image_size(width, 'w')
+        print('Image width: %d' % width)
 
     def control_panel_init(self, control_panel):
 
         num_colors = self.controller.sampler.num_colors
         num_gen_iterations = self.controller.sampler.num_iterations
         num_rec_iterations = self.controller.recognizer.num_iterations
-        image_size = self.controller.sampler.image_width
+        image_height = self.controller.sampler.image_height
+        image_width = self.controller.sampler.image_width
         num_rows = 2 * (self.controller.sampler.num_colors + 3)
         num_columns = self.controller.sampler.num_colors + 3
 
-        label_names = ['Number of generating iterations:', 'Image size:', 'Number of recognition iterations:', 'Num colors:']
+        label_names = ['Number of generating iterations:', 'Image height:',
+                       'Image width:', 'Number of recognition iterations:', 'Num colors:']
         COLOR_NAMES = ('Red', 'Blue', 'Green', 'Cyan', 'Magenta', 'Yellow', 'Black', 'White')
-        label_grid_coords = [(0, num_columns), (3, num_columns), (6, num_columns), (9, num_columns)]
+        label_grid_coords = [(0, num_columns), (3, num_columns), (6, num_columns), (9, num_columns), (12, num_columns)]
 
         entries = []
         for label_name, label_coords in zip(label_names, label_grid_coords):
@@ -346,12 +366,14 @@ class SettingsPage(tk.Frame):
 
         entries[0].insert(0, str(num_gen_iterations))
         entries[0].bind('<Return>', lambda event: self.set_num_iterations(self.controller.sampler, entries[0]))
-        entries[1].insert(0, str(image_size))
-        entries[1].bind('<Return>', lambda event: self.set_image_size(entries[1]))
-        entries[2].insert(0, str(num_rec_iterations))
-        entries[2].bind('<Return>', lambda event: self.set_num_iterations(self.controller.recognizer, entries[2]))
-        entries[3].insert(0, str(num_colors))
-        entries[3].bind('<Return>', lambda event: self.set_num_colors(entries[3]))
+        entries[1].insert(0, str(image_height))
+        entries[1].bind('<Return>', lambda event: self.set_image_height(entries[1]))
+        entries[2].insert(0, str(image_width))
+        entries[2].bind('<Return>', lambda event: self.set_image_width(entries[2]))
+        entries[3].insert(0, str(num_rec_iterations))
+        entries[3].bind('<Return>', lambda event: self.set_num_iterations(self.controller.recognizer, entries[3]))
+        entries[4].insert(0, str(num_colors))
+        entries[4].bind('<Return>', lambda event: self.set_num_colors(entries[4]))
 
         g_horizontal_entries = []
         g_vertical_entries = []
