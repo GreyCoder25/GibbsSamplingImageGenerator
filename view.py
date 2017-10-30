@@ -181,7 +181,7 @@ class MainPage(tk.Frame):
     def show_noisy_image(self):
 
         self.controller.recognizer.set_image(self.controller.noiser.simple_noise(self.controller.sampler.image,
-                                                                                 self.controller.recognizer.num_colors, 0.49))
+                                                                                 self.controller.recognizer.num_colors, 0.25))
         print(self.controller.noiser.image.shape)
         self.image_init(self.canvas.figure.axes[1], 'rec')
         self.image_init(self.canvas.figure.axes[2], 'rec')
@@ -217,7 +217,7 @@ class MainPage(tk.Frame):
         recognizer.reset()
         sampler = self.controller.sampler
 
-        pixelwise = np.empty(num_iterations + 1)
+        pixelwise = np.empty(num_iterations + 1 + 720)
         pixelwise[0] = (sampler.image != recognizer.image).sum()
         line = np.empty(num_iterations + 1)
         line[0] = pixelwise[0]
@@ -225,7 +225,7 @@ class MainPage(tk.Frame):
         pixelwise_total_time = 0
         line_total_time = 0
 
-        for i in range(1, num_iterations + 1):
+        for i in range(1, num_iterations + 1 + 720):
             start = time.time()
             recognizer.iteration_of_recognition()
             finish = time.time()
@@ -234,7 +234,7 @@ class MainPage(tk.Frame):
             pixelwise[i] = (sampler.image != recognizer.image).sum()
         recognizer.reset()
 
-        pixelwise_average_time = pixelwise_total_time / num_iterations
+        pixelwise_average_time = pixelwise_total_time / (num_iterations + 720)
         print("Pixelwise average time: %f" % pixelwise_average_time)
 
         for i in range(1, num_iterations + 1):

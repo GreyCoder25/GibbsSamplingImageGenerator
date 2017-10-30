@@ -283,14 +283,14 @@ class GibbsSamplingImageRecognizer:
             for j in range(2, self.image_width):
                 f_left[:, j] = np.dot(f_left[:, j - 1], self.g_horizontal *
                                       np.vectorize(q1)(i, j-1, np.arange(self.num_colors)).reshape(self.num_colors, 1))
-                f_left[:, j] = f_left[:, j] / 100
+                f_left[:, j] = f_left[:, j]
                 # print(f_left[:, j])
 
             f_right = np.ones((self.num_colors, self.image_width))
             for j in range(self.image_width - 2, -1, -1):
                 f_right[:, j] = np.dot(self.g_horizontal * np.vectorize(q1)(i, j+1, np.arange(self.num_colors)),
                                        f_right[:, j + 1])
-                f_right[:, j] = f_right[:, j] / 100
+                f_right[:, j] = f_right[:, j]
 
             self.image[i, 0] = generate_k0(i, f_left, f_right, q1)
 
@@ -304,7 +304,8 @@ class GibbsSamplingImageRecognizer:
                 # print(p_labels)
                 p_prev_label = sum(p_labels)
                 for label_index in range(len(p_labels)):
-                    p_labels[label_index] /= p_prev_label
+                    if p_prev_label > 0:
+                        p_labels[label_index] /= p_prev_label
 
                 # print(sum(p_labels))
                 rand_point = np.random.uniform(0, sum(p_labels))

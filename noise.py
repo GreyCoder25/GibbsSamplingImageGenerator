@@ -9,7 +9,7 @@ class Noiser:
         self.p_spec_noise = self.p / (num_colors - 1)
         image_height, image_width = image.shape
         self.image = image.copy()
-        print(self.image.shape)
+        # print(self.image.shape)
 
         for i in range(0, image_height):
             for j in range(0, image_width):
