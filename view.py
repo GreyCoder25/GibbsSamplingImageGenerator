@@ -143,6 +143,9 @@ class MainPage(tk.Frame):
             pix_vals = self.controller.sampler.image
         elif pix_vals_type == 'rec':
             pix_vals = self.controller.recognizer.image
+        elif pix_vals_type == 'max_freq':
+            pix_vals = self.controller.recognizer.get_max_freq_image()
+            # print(pix_vals)
         cmap = mpl.colors.ListedColormap(COLORS[:self.controller.sampler.num_colors])
         ax.pcolormesh(pix_vals, cmap=cmap)
 
@@ -175,33 +178,36 @@ class MainPage(tk.Frame):
 
     def update_recognized_image(self):
 
-        self.image_init(self.canvas.figure.axes[2], 'rec')
+        self.image_init(self.canvas.figure.axes[2], 'max_freq')
         self.canvas.draw()
 
     def show_noisy_image(self):
 
         self.controller.recognizer.set_image(self.controller.noiser.simple_noise(self.controller.sampler.image,
-                                                                                 self.controller.recognizer.num_colors, 0.25))
-        print(self.controller.noiser.image.shape)
+                                                                                 self.controller.recognizer.num_colors, 0.4))
+
         self.image_init(self.canvas.figure.axes[1], 'rec')
         self.image_init(self.canvas.figure.axes[2], 'rec')
         self.canvas.draw()
 
     def next_generating_iteration(self):
 
-            # for i in range(20):
-            #     for j in range(1):
+        # for i in range(20):
+        #     for j in range(1):
         self.controller.sampler.iteration_of_generation()
         self.update_generated_image()
 
     def next_pixelwise_recognition_iteration(self):
-
+        # for i in range(20):
+        #     for j in range(1):
         self.controller.recognizer.iteration_of_recognition()
         self.update_recognized_image()
 
     def next_line_recognition_iteration(self):
 
         # for i in range(1000):
+        # for i in range(20):
+        #     for j in range(1):
         self.controller.recognizer.iteration_of_line_recognition()
         self.update_recognized_image()
 
@@ -217,7 +223,7 @@ class MainPage(tk.Frame):
         recognizer.reset()
         sampler = self.controller.sampler
 
-        pixelwise = np.empty(num_iterations + 1 + 720)
+        pixelwise = np.empty(num_iterations + 1 + 40000)
         pixelwise[0] = (sampler.image != recognizer.image).sum()
         line = np.empty(num_iterations + 1)
         line[0] = pixelwise[0]
@@ -225,16 +231,16 @@ class MainPage(tk.Frame):
         pixelwise_total_time = 0
         line_total_time = 0
 
-        for i in range(1, num_iterations + 1 + 720):
+        for i in range(1, num_iterations + 1 + 40000):
             start = time.time()
             recognizer.iteration_of_recognition()
             finish = time.time()
             print('Time of pixelwise perfoming iteration %d: %f' % (i, finish - start))
             pixelwise_total_time += finish - start
-            pixelwise[i] = (sampler.image != recognizer.image).sum()
+            pixelwise[i] = (sampler.image != recognizer.get_max_freq_image()).sum()
         recognizer.reset()
 
-        pixelwise_average_time = pixelwise_total_time / (num_iterations + 720)
+        pixelwise_average_time = pixelwise_total_time / (num_iterations + 40000)
         print("Pixelwise average time: %f" % pixelwise_average_time)
 
         for i in range(1, num_iterations + 1):
@@ -243,7 +249,7 @@ class MainPage(tk.Frame):
             finish = time.time()
             print('Time of line perfoming iteration %d: %f' % (i, finish - start))
             line_total_time += finish - start
-            line[i] = (sampler.image != recognizer.image).sum()
+            line[i] = (sampler.image != recognizer.get_max_freq_image()).sum()
         recognizer.reset()
 
         line_average_time = line_total_time / num_iterations

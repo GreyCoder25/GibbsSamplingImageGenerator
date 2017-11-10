@@ -4,7 +4,7 @@ import noise
 
 class GibbsSamplingImageGenerator:
 
-    def __init__(self, image_width=20, image_height=20, num_colors=3, num_iterations=100):
+    def __init__(self, image_width=100, image_height=100, num_colors=3, num_iterations=100):
 
         """Initializes image generator. Set's initial values of image(2-D array of integers),
         G-matrices(weight functions of different states of neighboring pixels), number of iterations of
@@ -163,7 +163,6 @@ class GibbsSamplingImageGenerator:
 
     def check_coords(self, i, j):
 
-        # print('Checking (0 <= %d < %d) and (0 <= %d < %d)' % (i, self.image_height, j, self.image_width))
         return (0 <= i < self.image_height) and (0 <= j < self.image_width)
 
     def execute_all_remaining(self):
@@ -184,6 +183,7 @@ class GibbsSamplingImageRecognizer:
         self.num_colors = sampler.num_colors
         self.image = np.empty_like(sampler.image)
         self.initial_image = self.image.copy()
+        self.color_counters = np.zeros((self.num_colors, self.image_height, self.image_width))
         self.current_iteration = 0
         self.noiser = noiser
 
@@ -218,34 +218,37 @@ class GibbsSamplingImageRecognizer:
 
         COLORS = range(self.num_colors)
 
-        for i in range(0, self.image_height):
-            for j in range(0, self.image_width):
-                p_colors = []                               # list of probabilities of colors
-                colors_interval = 0
-                curr_color = self.initial_image[i, j]
-                for color in COLORS:                        # Calculation of color's probability distribution
-                    p_color = self.get_color_prob(i, j, color) * self.noiser.p_x_cond_k('simple', curr_color, color)
-                    p_colors.append(p_color)
-                    colors_interval += p_color
-                rand_point = np.random.uniform(0, colors_interval)  # choosing a color from calculated distribution
-                p_colors.append(0)                          # for next cycle to work
+        for traverse_type in ((0, 1), (1, 0)):
+            for i in range(0, self.image_height):
+                for j in range(traverse_type[i % 2], self.image_width, 2):
+                    p_colors = []                               # list of probabilities of colors
+                    colors_interval = 0
+                    curr_color = self.initial_image[i, j]
+                    for color in COLORS:                        # Calculation of color's probability distribution
+                        p_color = self.get_color_prob(i, j, color) * self.noiser.p_x_cond_k('simple', curr_color, color)
+                        p_colors.append(p_color)
+                        colors_interval += p_color
+                    rand_point = np.random.uniform(0, colors_interval)  # choosing a color from calculated distribution
+                    p_colors.append(0)                          # for next cycle to work
 
-                start_of_interval, end_of_interval = 0, p_colors[0]
+                    start_of_interval, end_of_interval = 0, p_colors[0]
 
-                for color in COLORS:
-                    if start_of_interval <= rand_point <= end_of_interval:
-                        self.image[i, j] = color
-                        break
-                    start_of_interval = end_of_interval
-                    end_of_interval += p_colors[color + 1]
+                    for color in COLORS:
+                        if start_of_interval <= rand_point <= end_of_interval:
+                            self.image[i, j] = color
+                            break
+                        start_of_interval = end_of_interval
+                        end_of_interval += p_colors[color + 1]
 
         self.current_iteration += 1
+        self.update_color_counters()
 
     def iteration_of_line_recognition(self):
 
         def q1(i, j, k):
 
             res = self.noiser.p_x_cond_k('simple', self.initial_image[i, j], k)
+            # res = 1
             if self.check_coords(i - 1, j):
                 res *= self.g_vertical[self.image[i - 1, j], k]
             if self.check_coords(i + 1, j):
@@ -255,9 +258,7 @@ class GibbsSamplingImageRecognizer:
 
         def p_k1_k2(i, j1, j2, k1, k2, f_left, f_right, q1):
 
-            # print(f_left[k1, j1] * q1(i, j1, k1) * self.g_horizontal[k1, k2] * q1(i, j2, k2) * f_right[k2, j2])
             return f_left[k1, j1] * q1(i, j1, k1) * self.g_horizontal[k1, k2] * q1(i, j2, k2) * f_right[k2, j2]
-            # return f_left[k1, j1] * self.g_horizontal[k1, k2] * f_right[k2, j2]
 
         def generate_k0(row, f_left, f_right, q1):
 
@@ -269,55 +270,53 @@ class GibbsSamplingImageRecognizer:
             P = P.sum(axis=1)
             rand_point = np.random.uniform(0, P.sum())
             interval_begin, interval_end = 0, P[0]
+
             for i in range(self.num_colors):
                 if interval_begin <= rand_point <= interval_end:
                     return i
                 interval_begin += P[i]
                 interval_end += P[i+1]
 
-        # print(np.vectorize(q1)(0, 1, np.arange(self.num_colors)))
         # function body begins here
-        for i in range(self.image_height):
+        for start_row in (0, 1):
+            for i in range(start_row, self.image_height, 2):
+                f_left = np.ones((self.num_colors, self.image_width))
+                for j in range(2, self.image_width):
+                    f_left[:, j] = np.dot(f_left[:, j - 1], self.g_horizontal *
+                                          np.vectorize(q1)(i, j-1, np.arange(self.num_colors)).reshape(self.num_colors, 1))
+                    f_left[:, j] = f_left[:, j] / f_left[:, j].sum()
 
-            f_left = np.ones((self.num_colors, self.image_width))
-            for j in range(2, self.image_width):
-                f_left[:, j] = np.dot(f_left[:, j - 1], self.g_horizontal *
-                                      np.vectorize(q1)(i, j-1, np.arange(self.num_colors)).reshape(self.num_colors, 1))
-                f_left[:, j] = f_left[:, j]
-                # print(f_left[:, j])
+                f_right = np.ones((self.num_colors, self.image_width))
+                for j in range(self.image_width - 2, -1, -1):
+                    f_right[:, j] = np.dot(self.g_horizontal * np.vectorize(q1)(i, j+1, np.arange(self.num_colors)),
+                                           f_right[:, j + 1])
+                    f_right[:, j] = f_right[:, j] / f_right[:, j].sum()
 
-            f_right = np.ones((self.num_colors, self.image_width))
-            for j in range(self.image_width - 2, -1, -1):
-                f_right[:, j] = np.dot(self.g_horizontal * np.vectorize(q1)(i, j+1, np.arange(self.num_colors)),
-                                       f_right[:, j + 1])
-                f_right[:, j] = f_right[:, j]
+                self.image[i, 0] = generate_k0(i, f_left, f_right, q1)
 
-            self.image[i, 0] = generate_k0(i, f_left, f_right, q1)
+                for j in range(1, self.image_width):
+                    p_labels = []
+                    prev_label = self.image[i, j-1]
+                    for label in range(self.num_colors):
+                        p_label = p_k1_k2(i, j-1, j, prev_label, label, f_left, f_right, q1)
+                        p_labels.append(p_label)
 
-            for j in range(1, self.image_width):
-                p_labels = []
-                prev_label = self.image[i, j-1]
-                for label in range(self.num_colors):
-                    p_label = p_k1_k2(i, j-1, j, prev_label, label, f_left, f_right, q1)
-                    p_labels.append(p_label)
+                    p_prev_label = sum(p_labels)
+                    for label_index in range(len(p_labels)):
+                        if p_prev_label > 0:
+                            p_labels[label_index] /= p_prev_label
 
-                # print(p_labels)
-                p_prev_label = sum(p_labels)
-                for label_index in range(len(p_labels)):
-                    if p_prev_label > 0:
-                        p_labels[label_index] /= p_prev_label
-
-                # print(sum(p_labels))
-                rand_point = np.random.uniform(0, sum(p_labels))
-                interval_begin, interval_end = 0, p_labels[0]
-                for label in range(self.num_colors):
-                    if interval_begin <= rand_point <= interval_end:
-                        self.image[i, j] = label
-                        break
-                    interval_begin += p_labels[label]
-                    interval_end += p_labels[label + 1]
+                    rand_point = np.random.uniform(0, sum(p_labels))
+                    interval_begin, interval_end = 0, p_labels[0]
+                    for label in range(self.num_colors):
+                        if interval_begin <= rand_point <= interval_end:
+                            self.image[i, j] = label
+                            break
+                        interval_begin += p_labels[label]
+                        interval_end += p_labels[label + 1]
 
         self.current_iteration += 1
+        self.update_color_counters()
 
     def get_color_prob(self, i, j, color):
 
@@ -327,9 +326,19 @@ class GibbsSamplingImageRecognizer:
 
         return GibbsSamplingImageGenerator.check_coords(self, i, j)
 
+    def update_color_counters(self):
+
+        for color in range(self.num_colors):
+            self.color_counters[color] += (self.image == color)
+
+    def get_max_freq_image(self):
+
+        return np.argmax(self.color_counters, axis=0)
+
     def reset(self):
 
         self.image = self.initial_image.copy()
+        self.color_counters = np.zeros((self.num_colors, self.image_height, self.image_width))
         self.current_iteration = 0
 
     def execute_all_remaining(self, rec_type):
