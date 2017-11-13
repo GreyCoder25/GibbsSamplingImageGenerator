@@ -32,7 +32,7 @@ class GibbsSamplingImageGenerator:
         self.g_horizontal = np.ones((self.num_colors, self.num_colors))
         self.g_vertical = np.ones((self.num_colors, self.num_colors))
         self.num_iterations = num_iterations
-        self.current_iteration = 0
+        self.current_iteration = 1
 
     def iteration_of_generation(self):
 
@@ -69,7 +69,7 @@ class GibbsSamplingImageGenerator:
 
         """Resets the generated image by generating new random image."""
         self.image = np.random.randint(0, self.num_colors, size=(self.image_height, self.image_width))
-        self.current_iteration = 0
+        self.current_iteration = 1
     #
     # def noise(self, noiser):
     #
@@ -184,7 +184,8 @@ class GibbsSamplingImageRecognizer:
         self.image = np.empty_like(sampler.image)
         self.initial_image = self.image.copy()
         self.color_counters = np.zeros((self.num_colors, self.image_height, self.image_width))
-        self.current_iteration = 0
+        self.mean_prob = np.zeros((self.num_colors, self.image_height, self.image_width))
+        self.current_iteration = 1
         self.noiser = noiser
 
     def set_image(self, image):
@@ -208,11 +209,15 @@ class GibbsSamplingImageRecognizer:
 
         GibbsSamplingImageGenerator.set_image_height(self, height)
         self.initial_image = self.image.copy()
+        self.color_counters = np.zeros((self.num_colors, self.image_height, self.image_width))
+        self.mean_prob = np.zeros((self.num_colors, self.image_height, self.image_width))
 
     def set_image_width(self, width):
 
         GibbsSamplingImageGenerator.set_image_width(self, width)
         self.initial_image = self.image.copy()
+        self.color_counters = np.zeros((self.num_colors, self.image_height, self.image_width))
+        self.mean_prob = np.zeros((self.num_colors, self.image_height, self.image_width))
 
     def iteration_of_recognition(self):
 
@@ -226,6 +231,7 @@ class GibbsSamplingImageRecognizer:
                     curr_color = self.initial_image[i, j]
                     for color in COLORS:                        # Calculation of color's probability distribution
                         p_color = self.get_color_prob(i, j, color) * self.noiser.p_x_cond_k('simple', curr_color, color)
+                        self.update_mean_prob(color, i, j, self.current_iteration, p_color)
                         p_colors.append(p_color)
                         colors_interval += p_color
                     rand_point = np.random.uniform(0, colors_interval)  # choosing a color from calculated distribution
@@ -241,7 +247,7 @@ class GibbsSamplingImageRecognizer:
                         end_of_interval += p_colors[color + 1]
 
         self.current_iteration += 1
-        self.update_color_counters()
+        # self.update_color_counters()
 
     def iteration_of_line_recognition(self):
 
@@ -331,15 +337,24 @@ class GibbsSamplingImageRecognizer:
         for color in range(self.num_colors):
             self.color_counters[color] += (self.image == color)
 
+    def update_mean_prob(self, label, i, j, iter_number, p_curr):
+
+        self.mean_prob[label, i, j] = (self.mean_prob[label, i, j] * (iter_number - 1) + p_curr) / iter_number
+
     def get_max_freq_image(self):
 
         return np.argmax(self.color_counters, axis=0)
+
+    def get_max_prob_image(self):
+
+        return np.argmax(self.mean_prob, axis=0)
 
     def reset(self):
 
         self.image = self.initial_image.copy()
         self.color_counters = np.zeros((self.num_colors, self.image_height, self.image_width))
-        self.current_iteration = 0
+        self.mean_prob = np.zeros((self.num_colors, self.image_height, self.image_width))
+        self.current_iteration = 1
 
     def execute_all_remaining(self, rec_type):
 

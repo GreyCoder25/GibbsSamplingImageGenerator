@@ -145,7 +145,10 @@ class MainPage(tk.Frame):
             pix_vals = self.controller.recognizer.image
         elif pix_vals_type == 'max_freq':
             pix_vals = self.controller.recognizer.get_max_freq_image()
+        elif pix_vals_type == 'max_prob':
+            pix_vals = self.controller.recognizer.get_max_prob_image()
             # print(pix_vals)
+            print(self.controller.recognizer.mean_prob)
         cmap = mpl.colors.ListedColormap(COLORS[:self.controller.sampler.num_colors])
         ax.pcolormesh(pix_vals, cmap=cmap)
 
@@ -178,7 +181,7 @@ class MainPage(tk.Frame):
 
     def update_recognized_image(self):
 
-        self.image_init(self.canvas.figure.axes[2], 'max_freq')
+        self.image_init(self.canvas.figure.axes[2], 'max_prob')
         self.canvas.draw()
 
     def show_noisy_image(self):
