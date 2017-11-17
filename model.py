@@ -266,6 +266,10 @@ class GibbsSamplingImageRecognizer:
 
             return f_left[k1, j1] * q1(i, j1, k1) * self.g_horizontal[k1, k2] * q1(i, j2, k2) * f_right[k2, j2]
 
+        def p_k(i, j, k, f_left, f_right, q1):
+
+            return f_left[k, j] * q1(i, j, k) * f_right[k, j]
+
         def generate_k0(row, f_left, f_right, q1):
 
             P = np.empty((self.num_colors, self.num_colors))
@@ -321,8 +325,12 @@ class GibbsSamplingImageRecognizer:
                         interval_begin += p_labels[label]
                         interval_end += p_labels[label + 1]
 
+                    # updating posteriors of labels in current pixel
+                    for label in range(self.num_colors):
+                        self.update_mean_prob(label, i, j, self.current_iteration, p_k(i, j, label, f_left, f_right, q1))
+
         self.current_iteration += 1
-        self.update_color_counters()
+        # self.update_color_counters()
 
     def get_color_prob(self, i, j, color):
 

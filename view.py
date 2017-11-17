@@ -148,7 +148,7 @@ class MainPage(tk.Frame):
         elif pix_vals_type == 'max_prob':
             pix_vals = self.controller.recognizer.get_max_prob_image()
             # print(pix_vals)
-            print(self.controller.recognizer.mean_prob)
+            # print(self.controller.recognizer.mean_prob)
         cmap = mpl.colors.ListedColormap(COLORS[:self.controller.sampler.num_colors])
         ax.pcolormesh(pix_vals, cmap=cmap)
 
@@ -187,7 +187,7 @@ class MainPage(tk.Frame):
     def show_noisy_image(self):
 
         self.controller.recognizer.set_image(self.controller.noiser.simple_noise(self.controller.sampler.image,
-                                                                                 self.controller.recognizer.num_colors, 0.4))
+                                                                                 self.controller.recognizer.num_colors, 0.6))
 
         self.image_init(self.canvas.figure.axes[1], 'rec')
         self.image_init(self.canvas.figure.axes[2], 'rec')
@@ -226,7 +226,7 @@ class MainPage(tk.Frame):
         recognizer.reset()
         sampler = self.controller.sampler
 
-        pixelwise = np.empty(num_iterations + 1 + 40000)
+        pixelwise = np.empty(9 * num_iterations + 1)
         pixelwise[0] = (sampler.image != recognizer.image).sum()
         line = np.empty(num_iterations + 1)
         line[0] = pixelwise[0]
@@ -234,16 +234,16 @@ class MainPage(tk.Frame):
         pixelwise_total_time = 0
         line_total_time = 0
 
-        for i in range(1, num_iterations + 1 + 40000):
+        for i in range(1, 9 * num_iterations + 1):
             start = time.time()
             recognizer.iteration_of_recognition()
             finish = time.time()
             print('Time of pixelwise perfoming iteration %d: %f' % (i, finish - start))
             pixelwise_total_time += finish - start
-            pixelwise[i] = (sampler.image != recognizer.get_max_freq_image()).sum()
+            pixelwise[i] = (sampler.image != recognizer.get_max_prob_image()).sum()
         recognizer.reset()
 
-        pixelwise_average_time = pixelwise_total_time / (num_iterations + 40000)
+        pixelwise_average_time = pixelwise_total_time / (9 * num_iterations)
         print("Pixelwise average time: %f" % pixelwise_average_time)
 
         for i in range(1, num_iterations + 1):
@@ -252,7 +252,7 @@ class MainPage(tk.Frame):
             finish = time.time()
             print('Time of line perfoming iteration %d: %f' % (i, finish - start))
             line_total_time += finish - start
-            line[i] = (sampler.image != recognizer.get_max_freq_image()).sum()
+            line[i] = (sampler.image != recognizer.get_max_prob_image()).sum()
         recognizer.reset()
 
         line_average_time = line_total_time / num_iterations
