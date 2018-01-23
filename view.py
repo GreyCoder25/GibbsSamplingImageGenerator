@@ -187,7 +187,7 @@ class MainPage(tk.Frame):
     def show_noisy_image(self):
 
         self.controller.recognizer.set_image(self.controller.noiser.simple_noise(self.controller.sampler.image,
-                                                                                 self.controller.recognizer.num_colors, 0.6))
+                                                                                 self.controller.recognizer.num_colors, 0.4))
 
         self.image_init(self.canvas.figure.axes[1], 'rec')
         self.image_init(self.canvas.figure.axes[2], 'rec')
@@ -223,46 +223,68 @@ class MainPage(tk.Frame):
 
         num_iterations = self.controller.recognizer.num_iterations
         recognizer = self.controller.recognizer
-        recognizer.reset()
         sampler = self.controller.sampler
+        noiser = self.controller.noiser
+        noise_level = 0.6
+        # save_file = 'monotonous5_2labels.pickle'
+        number_of_experiments = 1
 
-        pixelwise = np.empty(9 * num_iterations + 1)
-        pixelwise[0] = (sampler.image != recognizer.image).sum()
-        line = np.empty(num_iterations + 1)
-        line[0] = pixelwise[0]
+        for _ in range(number_of_experiments):
+            # sampler.reset()
+            # recognizer.reset()
 
-        pixelwise_total_time = 0
-        line_total_time = 0
+            # for i in range(sampler.num_iterations):
+            #     sampler.iteration_of_generation()
 
-        for i in range(1, 9 * num_iterations + 1):
-            start = time.time()
-            recognizer.iteration_of_recognition()
-            finish = time.time()
-            print('Time of pixelwise perfoming iteration %d: %f' % (i, finish - start))
-            pixelwise_total_time += finish - start
-            pixelwise[i] = (sampler.image != recognizer.get_max_prob_image()).sum()
-        recognizer.reset()
+            # recognizer.set_image(noiser.simple_noise(sampler.image, recognizer.num_colors, noise_level))
 
-        pixelwise_average_time = pixelwise_total_time / (9 * num_iterations)
-        print("Pixelwise average time: %f" % pixelwise_average_time)
+            pixelwise_max_freq = np.empty(9*num_iterations + 1)
+            pixelwise_aver_prob = np.empty(9*num_iterations + 1)
+            pixelwise_max_freq[0] = (sampler.image != recognizer.image).sum()
+            pixelwise_aver_prob[0] = (sampler.image != recognizer.image).sum()
+            line_max_freq = np.empty(num_iterations + 1)
+            line_aver_prob = np.empty(num_iterations + 1)
+            line_max_freq[0] = pixelwise_max_freq[0]
+            line_aver_prob[0] = pixelwise_aver_prob[0]
 
-        for i in range(1, num_iterations + 1):
-            start = time.time()
-            recognizer.iteration_of_line_recognition()
-            finish = time.time()
-            print('Time of line perfoming iteration %d: %f' % (i, finish - start))
-            line_total_time += finish - start
-            line[i] = (sampler.image != recognizer.get_max_prob_image()).sum()
-        recognizer.reset()
+            pixelwise_total_time = 0
+            line_total_time = 0
+
+            for i in range(1, 9*num_iterations + 1):
+                start = time.time()
+                recognizer.iteration_of_recognition()
+                finish = time.time()
+                print('Time of pixelwise max_freq perfoming iteration %d: %f' % (i, finish - start))
+                pixelwise_total_time += finish - start
+                pixelwise_max_freq[i] = (sampler.image != recognizer.get_max_freq_image()).sum()
+                pixelwise_aver_prob[i] = (sampler.image != recognizer.get_max_prob_image()).sum()
+            recognizer.reset()
+
+            pixelwise_average_time = pixelwise_total_time / (9*num_iterations)
+            print("Pixelwise max_freq average time: %f" % pixelwise_average_time)
+
+            for i in range(1, num_iterations + 1):
+                start = time.time()
+                recognizer.iteration_of_line_recognition()
+                finish = time.time()
+                print('Time of line perfoming iteration %d: %f' % (i, finish - start))
+                line_total_time += finish - start
+                line_max_freq[i] = (sampler.image != recognizer.get_max_freq_image()).sum()
+                line_aver_prob[i] = (sampler.image != recognizer.get_max_prob_image()).sum()
+            recognizer.reset()
+
+            # with open(save_file, 'ab') as f:
+            #     for data_array in (pixelwise_max_freq, line_max_freq, pixelwise_aver_prob, line_aver_prob):
+            #         pickle.dump(data_array, f)
 
         line_average_time = line_total_time / num_iterations
         print("Line average time: %f" % line_average_time)
 
-        average_times = (pixelwise_average_time, line_average_time)
+        # average_times = (pixelwise_average_time, line_average_time, pixelwise_average_time, line_average_time)
 
-        graph_page = self.controller.frames[GraphPage]
-        graph_page.get_data(average_times, pixelwise, line)
-        self.show_graph_page()
+        # graph_page = self.controller.frames[GraphPage]
+        # graph_page.get_data(average_times, pixelwise_max_freq, line_max_freq, pixelwise_aver_prob, line_aver_prob)
+        # self.show_graph_page()
 
     def show_graph_page(self):
 
@@ -418,8 +440,8 @@ class GraphPage(tk.Frame):
 
         tk.Frame.__init__(self, parent)
         self.controller = controller
-        self.graph_names = ["Pixelwise Gibbs sampler", "Line Gibbs sampler", "Min-cut"]
-        self.graph_styles = ['r-', 'b-', 'g-']
+        self.graph_names = ["Pixelwise max-freq", "Line max_freq", "Pixelwise aver-prob", "Line aver-prob", "Min-cut"]
+        self.graph_styles = ['r-', 'b-', 'm-', 'c-', 'g-']
         self.data_lists = []
 
         main_page_button = tk.Button(self, text="Main page", command=lambda: controller.show_frame(MainPage))
@@ -456,6 +478,7 @@ class GraphPage(tk.Frame):
         kvargs = {}
         for index, data in enumerate(self.data_lists):
             args.append(np.arange(len(data)) * self.average_times[index])
+            # args.append(np.arange(len(data)))
             args.append(data)
             args.append(self.graph_styles[index])
             kvargs['label'] = self.graph_names[index]
