@@ -247,7 +247,7 @@ class GibbsSamplingImageRecognizer:
                         end_of_interval += p_colors[color + 1]
 
         self.current_iteration += 1
-        # self.update_color_counters()
+        self.update_color_counters()
 
     def iteration_of_line_recognition(self):
 
@@ -303,6 +303,8 @@ class GibbsSamplingImageRecognizer:
                     f_right[:, j] = f_right[:, j] / f_right[:, j].sum()
 
                 self.image[i, 0] = generate_k0(i, f_left, f_right, q1)
+                for label in range(self.num_colors):
+                    self.update_mean_prob(label, i, 0, self.current_iteration, p_k(i, 0, label, f_left, f_right, q1))
 
                 for j in range(1, self.image_width):
                     p_labels = []
@@ -330,7 +332,7 @@ class GibbsSamplingImageRecognizer:
                         self.update_mean_prob(label, i, j, self.current_iteration, p_k(i, j, label, f_left, f_right, q1))
 
         self.current_iteration += 1
-        # self.update_color_counters()
+        self.update_color_counters()
 
     def get_color_prob(self, i, j, color):
 
