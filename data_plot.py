@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import pickle
 
 # IF YOU WANNA PLOT GRAPH OF EXPERIMENT WITH MORE LABELS CHANGE THE COEFFICIENTS
-file_name = 'monotonous5_2labels.pickle'
+file_name = 'monotonous4_7labels.pickle'
 
 arr1_total = np.array([])
 arr2_total = np.array([])

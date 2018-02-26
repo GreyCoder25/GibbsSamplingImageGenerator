@@ -1,8 +1,19 @@
 import numpy as np
+cimport numpy as np
 import noise
 
+DTYPE = np.int
+GTYPE = np.float
 
-class GibbsSamplingImageGenerator:
+ctypedef np.int_t DTYPE_t
+ctypedef np.float_t GTYPE_t
+
+
+cdef class GibbsSamplingImageGenerator:
+
+    cdef int image_height, image_width
+    cdef int num_colors
+    cdef int num_iterations, current_iteration
 
     def __init__(self, image_width=100, image_height=100, num_colors=3, num_iterations=100):
 
@@ -28,13 +39,16 @@ class GibbsSamplingImageGenerator:
         self.image_width = image_width
         self.image_height = image_height
         self.num_colors = num_colors
-        self.image = np.random.randint(0, self.num_colors, size=(self.image_height, self.image_width))
-        self.g_horizontal = np.ones((self.num_colors, self.num_colors))
-        self.g_vertical = np.ones((self.num_colors, self.num_colors))
+        self.image = np.random.randint(0, self.num_colors, size=(self.image_height, self.image_width), dtype=DTYPE)
+        self.g_horizontal = np.ones((self.num_colors, self.num_colors), dtype=GTYPE)
+        self.g_vertical = np.ones((self.num_colors, self.num_colors), dtype=GTYPE)
         self.num_iterations = num_iterations
         self.current_iteration = 1
 
     def iteration_of_generation(self):
+        self._iteration_of_generation(self.g_vertical, self.g_horizontal, self.image)
+
+    def _iteration_of_generation(self, np.ndarray[GTYPE_t, ndim=2] g_v, np.ndarray[GTYPE_t, ndim=2] g_h, np.ndarray[DTYPE_t, ndim=2] im):
 
         """Performs one iteration of Gibbs sampling of the image."""
 
@@ -46,7 +60,7 @@ class GibbsSamplingImageGenerator:
                 p_colors = []                               # list of probabilities of colors
                 colors_interval = 0
                 for color in COLORS:                        # Calculation of color's probability distribution
-                    p_color = self.get_color_prob(i, j, color)
+                    p_color = self.get_color_prob(self.g_vertical, self.g_horizontal, self.image, i, j, color)
                     p_colors.append(p_color)
                     colors_interval += p_color
                 rand_point = np.random.uniform(0, colors_interval)      # choosing a color from calculated distribution
@@ -104,7 +118,8 @@ class GibbsSamplingImageGenerator:
         elif g_type == "v":
             return self.g_vertical[color1, color2]
 
-    def get_color_prob(self, i, j, color):
+    cdef double get_color_prob(self, np.ndarray[GTYPE_t, ndim=2] g_v, np.ndarray[GTYPE_t, ndim=2] g_h,
+                               np.ndarray[DTYPE_t, ndim=2] im, int i, int j, int color):
 
         """Estimates the probability of given color to be real color of the pixel with given coordinates.
 
@@ -122,17 +137,15 @@ class GibbsSamplingImageGenerator:
 
         """
 
-        p = 1
+        cdef double p = 1.0
         if self.check_coords(i, j - 1):
-            p *= self.g_horizontal[self.image[i, j - 1], color]
+            p *= g_h[im[i, j - 1], color]
         if self.check_coords(i, j + 1):
-            p *= self.g_horizontal[color,
-                                   self.image[i,
-                                              j + 1]]
+            p *= g_h[color, im[i, j + 1]]
         if self.check_coords(i - 1, j):
-            p *= self.g_vertical[self.image[i - 1, j], color]
+            p *= g_v[im[i - 1, j], color]
         if self.check_coords(i + 1, j):
-            p *= self.g_vertical[color, self.image[i + 1, j]]
+            p *= g_v[color, im[i + 1, j]]
 
         return p
 
@@ -161,7 +174,7 @@ class GibbsSamplingImageGenerator:
             self.g_vertical = np.ones((self.num_colors, self.num_colors))
             # print(self.g_horizontal, self.g_vertical)
 
-    def check_coords(self, i, j):
+    cdef bint check_coords(self, int i, int j):
 
         return (0 <= i < self.image_height) and (0 <= j < self.image_width)
 
@@ -336,7 +349,7 @@ class GibbsSamplingImageRecognizer:
 
     def get_color_prob(self, i, j, color):
 
-        return GibbsSamplingImageGenerator.get_color_prob(self, i, j, color)
+        return GibbsSamplingImageGenerator.get_color_prob(self, self.g_vertical, self.g_horizontal, self.image, i, j, color)
 
     def check_coords(self, i, j):
 

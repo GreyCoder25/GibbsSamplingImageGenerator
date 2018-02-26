@@ -195,9 +195,10 @@ class MainPage(tk.Frame):
 
     def next_generating_iteration(self):
 
-        # for i in range(20):
-        #     for j in range(1):
+        start = time.time()
         self.controller.sampler.iteration_of_generation()
+        finish = time.time()
+        print("Time: %f" % (finish - start))
         self.update_generated_image()
 
     def next_pixelwise_recognition_iteration(self):
