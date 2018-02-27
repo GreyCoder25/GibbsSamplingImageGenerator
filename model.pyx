@@ -1,6 +1,8 @@
 import numpy as np
 cimport numpy as np
+from libc.stdlib cimport rand, RAND_MAX
 import noise
+import time
 
 DTYPE = np.int
 GTYPE = np.float
@@ -59,7 +61,6 @@ cdef class GibbsSamplingImageGeneratorPart:
         return (0 <= i < self.image_height) and (0 <= j < self.image_width)
 
 
-
 class GibbsSamplingImageGenerator(GibbsSamplingImageGeneratorPart):
 
     def __init__(self, image_width=100, image_height=100, num_colors=3, num_iterations=100):
@@ -94,37 +95,35 @@ class GibbsSamplingImageGenerator(GibbsSamplingImageGeneratorPart):
     def _iteration_of_generation(self, np.ndarray[GTYPE_t, ndim=2] g_v, np.ndarray[GTYPE_t, ndim=2] g_h, np.ndarray[DTYPE_t, ndim=2] im):
 
         """Performs one iteration of Gibbs sampling of the image."""
-
-        # print("Generation iteration %d started" % self.current_iteration)
-        #COLORS = range(self.num_colors)
-        # cdef int COLORS[self.num_colors]
         cdef int i, j, color
         p_colors_ndarray = np.ones(self.num_colors + 1, dtype=np.float)
         cdef double [:] p_colors = p_colors_ndarray                           # list of probabilities of colors
         cdef double colors_interval, p_color, rand_point
         cdef double start_of_interval, end_of_interval
 
-        for i in range(0, self.image_height):
-            for j in range(0, self.image_width):
+        cdef int im_h = self.image_height
+        cdef int im_w = self.image_width
+        cdef int num_col = self.num_colors
+
+        for i in range(0, im_h):
+            for j in range(0, im_w):
                 colors_interval = 0
-                for color in range(0, self.num_colors):                 # Calculation of color's probability distribution
-                    p_color = GibbsSamplingImageGeneratorPart.get_color_prob(self, self.g_vertical, self.g_horizontal, self.image, i, j, color)
+                for color in range(0, num_col):                 # Calculation of color's probability distribution
+                    p_color = GibbsSamplingImageGeneratorPart.get_color_prob(self, g_v, g_h, im, i, j, color)
                     p_colors[color] = p_color
                     colors_interval += p_color
-                rand_point = np.random.uniform(0, colors_interval)      # choosing a color from calculated distribution
+                rand_point = rand() / (float(RAND_MAX)) * colors_interval      # choosing a color from calculated distribution
                 p_colors[self.num_colors] = 0              # for next cycle to work
 
                 start_of_interval = 0
                 end_of_interval = p_colors[0]
 
-                for color in range(0, self.num_colors):
+                for color in range(0, num_col):
                     if start_of_interval <= rand_point <= end_of_interval:
-                        self.image[i, j] = color
+                        im[i, j] = color
                         break
                     start_of_interval = end_of_interval
                     end_of_interval += p_colors[color + 1]
-
-        # print("Generation iteration %d finished" % self.current_iteration)
 
         self.current_iteration += 1
 
