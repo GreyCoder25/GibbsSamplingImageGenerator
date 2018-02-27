@@ -97,9 +97,10 @@ class GibbsSamplingImageGenerator(GibbsSamplingImageGeneratorPart):
 
         # print("Generation iteration %d started" % self.current_iteration)
         #COLORS = range(self.num_colors)
-        cdef int COLORS[self.num_colors]
+        # cdef int COLORS[self.num_colors]
         cdef int i, j, color
-        cdef double p_colors[self.num_colors + 1]                           # list of probabilities of colors
+        p_colors_ndarray = np.ones(self.num_colors + 1, dtype=np.float)
+        cdef double [:] p_colors = p_colors_ndarray                           # list of probabilities of colors
         cdef double colors_interval, p_color, rand_point
         cdef double start_of_interval, end_of_interval
 
