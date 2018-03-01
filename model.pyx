@@ -1,6 +1,6 @@
 import numpy as np
 cimport numpy as np
-from libc.stdlib cimport rand, RAND_MAX, malloc
+from libc.stdlib cimport malloc
 import noise
 # import time
 
@@ -9,10 +9,6 @@ GTYPE = np.float
 
 ctypedef np.int_t DTYPE_t
 ctypedef np.float_t GTYPE_t
-
-
-cdef extern from "stdlib.h":
-    void srand(long int seedval)
 
 cdef extern from "time.h":
     long int time(int)
@@ -30,59 +26,12 @@ cdef rk_state *internal_state = <rk_state*>malloc(sizeof(rk_state))
 rk_seed(time(0), internal_state)
 
 
-cdef class GibbsSamplingImageGeneratorPart:
-
-    cdef public int image_height, image_width
-    cdef public int num_colors
-    cdef public int num_iterations, current_iteration
-
-    def __init__(self, image_width=100, image_height=100, num_colors=3, num_iterations=100):
-
-        self.image_width = image_width
-        self.image_height = image_height
-        self.num_colors = num_colors
-        self.num_iterations = num_iterations
-        self.current_iteration = 1
-
-    cdef public double get_color_prob(self, np.ndarray[GTYPE_t, ndim=2] g_v, np.ndarray[GTYPE_t, ndim=2] g_h,
-                               np.ndarray[DTYPE_t, ndim=2] im, int i, int j, int color):
-
-        """Estimates the probability of given color to be real color of the pixel with given coordinates.
-
-        Parameters
-        ----------
-        i, j: integer
-            Coordinates of pixel.
-        color:
-            Color value that need's to be checked.
-
-        Returns
-        -------
-        Probability of pixel with coordinates [i, j] to
-        have given color.
-
-        """
-
-        cdef double p = 1.0
-        cdef int h = im.shape[0]
-        cdef int w = im.shape[1]
-        if check_coords(i, j - 1, h, w):
-            p *= g_h[im[i, j - 1], color]
-        if check_coords(i, j + 1, h, w):
-            p *= g_h[color, im[i, j + 1]]
-        if check_coords(i - 1, j, h, w):
-            p *= g_v[im[i - 1, j], color]
-        if check_coords(i + 1, j, h, w):
-            p *= g_v[color, im[i + 1, j]]
-
-        return p
-
 cdef bint check_coords(int i, int j, int h, int w):
 
     return (0 <= i < h) and (0 <= j < w)
 
 
-class GibbsSamplingImageGenerator(GibbsSamplingImageGeneratorPart):
+class GibbsSamplingImageGenerator:
 
     def __init__(self, image_width=100, image_height=100, num_colors=3, num_iterations=100):
 
@@ -104,7 +53,11 @@ class GibbsSamplingImageGenerator(GibbsSamplingImageGeneratorPart):
         num_iterations : integer, optional (default=100)
             Specifies number of iterations of Gibbs sampler for image generating.
         """
-        GibbsSamplingImageGeneratorPart.__init__(self, image_width, image_height, num_colors, num_iterations)
+        self.image_width = image_width
+        self.image_height = image_height
+        self.num_colors = num_colors
+        self.num_iterations = num_iterations
+        self.current_iteration = 1
         self.image = np.random.randint(0, self.num_colors, size=(self.image_height, self.image_width), dtype=DTYPE)
         self.g_horizontal = np.ones((self.num_colors, self.num_colors), dtype=GTYPE)
         self.g_vertical = np.ones((self.num_colors, self.num_colors), dtype=GTYPE)
@@ -127,13 +80,13 @@ class GibbsSamplingImageGenerator(GibbsSamplingImageGeneratorPart):
         cdef int w = self.image_width
         cdef int num_col = self.num_colors
         cdef int num_iters = n
+        cdef int curr_iter = self.current_iteration
 
         for _ in range(0, num_iters):
             for i in range(0, h):
                 for j in range(0, w):
                     colors_interval = 0
                     for color in range(0, num_col):                 # Calculation of color's probability distribution
-                        # p_color = GibbsSamplingImageGeneratorPart.get_color_prob(self, g_v, g_h, im, i, j, color)
                         p_color = 1.0
                         if check_coords(i, j - 1, h, w):
                             p_color *= g_h[im[i, j - 1], color]
@@ -146,8 +99,6 @@ class GibbsSamplingImageGenerator(GibbsSamplingImageGeneratorPart):
                         p_colors[color] = p_color
                         colors_interval += p_color
 
-                    # rand_point = rand() / (float(RAND_MAX)) * colors_interval      # choosing a color from calculated distribution
-                    # rand_point = np.random.uniform(0, colors_interval)
                     rand_point = rk_double(internal_state) * colors_interval
                     p_colors[num_col] = 0              # for next cycle to work
 
@@ -161,7 +112,8 @@ class GibbsSamplingImageGenerator(GibbsSamplingImageGeneratorPart):
                         start_of_interval = end_of_interval
                         end_of_interval += p_colors[color + 1]
 
-            self.current_iteration += 1
+            curr_iter += 1
+        self.current_iteration = curr_iter
 
     def reset(self):
 
@@ -291,7 +243,7 @@ class GibbsSamplingImageRecognizer:
                     colors_interval = 0
                     curr_color = self.initial_image[i, j]
                     for color in COLORS:                        # Calculation of color's probability distribution
-                        p_color = GibbsSamplingImageGeneratorPart.get_color_prob(self, self.g_vertical, self.g_horizontal, self.image, i, j, color) * self.noiser.p_x_cond_k('simple', curr_color, color)
+                        p_color = self.noiser.p_x_cond_k('simple', curr_color, color)
                         self.update_mean_prob(color, i, j, self.current_iteration, p_color)
                         p_colors.append(p_color)
                         colors_interval += p_color
