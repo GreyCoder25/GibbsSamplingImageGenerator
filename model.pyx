@@ -110,10 +110,11 @@ class GibbsSamplingImageGenerator(GibbsSamplingImageGeneratorPart):
         self.g_vertical = np.ones((self.num_colors, self.num_colors), dtype=GTYPE)
 
 
-    def iteration_of_generation(self):
-        self._iteration_of_generation(self.g_vertical, self.g_horizontal, self.image)
+    def iteration_of_generation(self, num_iters=1):
+        self._iteration_of_generation(self.g_vertical, self.g_horizontal, self.image, num_iters)
 
-    def _iteration_of_generation(self, np.ndarray[GTYPE_t, ndim=2] g_v, np.ndarray[GTYPE_t, ndim=2] g_h, np.ndarray[DTYPE_t, ndim=2] im):
+    def _iteration_of_generation(self, np.ndarray[GTYPE_t, ndim=2] g_v, np.ndarray[GTYPE_t, ndim=2] g_h,
+                                 np.ndarray[DTYPE_t, ndim=2] im, n):
 
         """Performs one iteration of Gibbs sampling of the image."""
         cdef int i, j, color
@@ -125,41 +126,42 @@ class GibbsSamplingImageGenerator(GibbsSamplingImageGeneratorPart):
         cdef int h = self.image_height
         cdef int w = self.image_width
         cdef int num_col = self.num_colors
+        cdef int num_iters = n
 
+        for _ in range(0, num_iters):
+            for i in range(0, h):
+                for j in range(0, w):
+                    colors_interval = 0
+                    for color in range(0, num_col):                 # Calculation of color's probability distribution
+                        # p_color = GibbsSamplingImageGeneratorPart.get_color_prob(self, g_v, g_h, im, i, j, color)
+                        p_color = 1.0
+                        if check_coords(i, j - 1, h, w):
+                            p_color *= g_h[im[i, j - 1], color]
+                        if check_coords(i, j + 1, h, w):
+                            p_color *= g_h[color, im[i, j + 1]]
+                        if check_coords(i - 1, j, h, w):
+                            p_color *= g_v[im[i - 1, j], color]
+                        if check_coords(i + 1, j, h, w):
+                            p_color *= g_v[color, im[i + 1, j]]
+                        p_colors[color] = p_color
+                        colors_interval += p_color
 
-        for i in range(0, h):
-            for j in range(0, w):
-                colors_interval = 0
-                for color in range(0, num_col):                 # Calculation of color's probability distribution
-                    # p_color = GibbsSamplingImageGeneratorPart.get_color_prob(self, g_v, g_h, im, i, j, color)
-                    p_color = 1.0
-                    if check_coords(i, j - 1, h, w):
-                        p_color *= g_h[im[i, j - 1], color]
-                    if check_coords(i, j + 1, h, w):
-                        p_color *= g_h[color, im[i, j + 1]]
-                    if check_coords(i - 1, j, h, w):
-                        p_color *= g_v[im[i - 1, j], color]
-                    if check_coords(i + 1, j, h, w):
-                        p_color *= g_v[color, im[i + 1, j]]
-                    p_colors[color] = p_color
-                    colors_interval += p_color
+                    # rand_point = rand() / (float(RAND_MAX)) * colors_interval      # choosing a color from calculated distribution
+                    # rand_point = np.random.uniform(0, colors_interval)
+                    rand_point = rk_double(internal_state) * colors_interval
+                    p_colors[num_col] = 0              # for next cycle to work
 
-                # rand_point = rand() / (float(RAND_MAX)) * colors_interval      # choosing a color from calculated distribution
-                # rand_point = np.random.uniform(0, colors_interval)
-                rand_point = rk_double(internal_state) * colors_interval
-                p_colors[num_col] = 0              # for next cycle to work
+                    start_of_interval = 0
+                    end_of_interval = p_colors[0]
 
-                start_of_interval = 0
-                end_of_interval = p_colors[0]
+                    for color in range(0, num_col):
+                        if start_of_interval <= rand_point <= end_of_interval:
+                            im[i, j] = color
+                            break
+                        start_of_interval = end_of_interval
+                        end_of_interval += p_colors[color + 1]
 
-                for color in range(0, num_col):
-                    if start_of_interval <= rand_point <= end_of_interval:
-                        im[i, j] = color
-                        break
-                    start_of_interval = end_of_interval
-                    end_of_interval += p_colors[color + 1]
-
-        self.current_iteration += 1
+            self.current_iteration += 1
 
     def reset(self):
 
@@ -227,8 +229,7 @@ class GibbsSamplingImageGenerator(GibbsSamplingImageGeneratorPart):
 
     def execute_all_remaining(self):
 
-        for i in range(self.current_iteration, self.num_iterations):
-            self.iteration_of_generation()
+        self.iteration_of_generation(self.num_iterations - self.current_iteration)
 
 
 class GibbsSamplingImageRecognizer:

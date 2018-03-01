@@ -217,7 +217,10 @@ class MainPage(tk.Frame):
 
     def execute_all_gen_remaining(self):
 
+        start = time.time()
         self.controller.sampler.execute_all_remaining()
+        finish = time.time()
+        print("Generation time: %f" % (finish - start))
         self.update_generated_image()
 
     def test_and_show_graph(self):
