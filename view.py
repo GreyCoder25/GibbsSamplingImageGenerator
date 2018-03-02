@@ -186,6 +186,7 @@ class MainPage(tk.Frame):
 
     def show_noisy_image(self):
 
+        np.random.seed(20)
         self.controller.recognizer.set_image(self.controller.noiser.simple_noise(self.controller.sampler.image,
                                                                                  self.controller.recognizer.num_colors, 0.4))
 
@@ -195,7 +196,10 @@ class MainPage(tk.Frame):
 
     def next_generating_iteration(self):
 
+        start = time.time()
         self.controller.sampler.iteration_of_generation()
+        finish = time.time()
+        print("Generating iteration time: %f" % (finish - start))
         self.update_generated_image()
 
     def next_pixelwise_recognition_iteration(self):
@@ -203,7 +207,7 @@ class MainPage(tk.Frame):
         start = time.time()
         self.controller.recognizer.iteration_of_recognition()
         finish = time.time()
-        print("Time: %f" % (finish - start))
+        print("Recognizing iteration time: %f" % (finish - start))
         self.update_recognized_image()
 
     def next_line_recognition_iteration(self):

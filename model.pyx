@@ -62,6 +62,38 @@ class GibbsSamplingImageGenerator:
         self.g_horizontal = np.ones((self.num_colors, self.num_colors), dtype=GTYPE)
         self.g_vertical = np.ones((self.num_colors, self.num_colors), dtype=GTYPE)
 
+    def get_color_prob(self, i, j, color):
+
+        """Estimates the probability of given color to be real color of the pixel with given coordinates.
+        Parameters
+        ----------
+        i, j: integer
+            Coordinates of pixel.
+        color:
+            Color value that need's to be checked.
+        Returns
+        -------
+        Probability of pixel with coordinates [i, j] to
+        have given color.
+        """
+
+        p = 1
+        if self.check_coords(i, j - 1):
+            p *= self.g_horizontal[self.image[i, j - 1], color]
+        if self.check_coords(i, j + 1):
+            p *= self.g_horizontal[color,
+                                   self.image[i,
+                                              j + 1]]
+        if self.check_coords(i - 1, j):
+            p *= self.g_vertical[self.image[i - 1, j], color]
+        if self.check_coords(i + 1, j):
+            p *= self.g_vertical[color, self.image[i + 1, j]]
+
+        return p
+
+    def check_coords(self, i, j):
+
+        return (0 <= i < self.image_height) and (0 <= j < self.image_width)
 
     def iteration_of_generation(self, num_iters=1):
         self._iteration_of_generation(self.g_vertical, self.g_horizontal, self.image, num_iters)
@@ -100,6 +132,7 @@ class GibbsSamplingImageGenerator:
                         colors_interval += p_color
 
                     rand_point = rk_double(internal_state) * colors_interval
+                    # rand_point = np.random.uniform(0, colors_interval)
                     p_colors[num_col] = 0              # for next cycle to work
 
                     start_of_interval = 0
@@ -118,6 +151,7 @@ class GibbsSamplingImageGenerator:
     def reset(self):
 
         """Resets the generated image by generating new random image."""
+        np.random.seed(20)
         self.image = np.random.randint(0, self.num_colors, size=(self.image_height, self.image_width))
         self.current_iteration = 1
     #
@@ -255,8 +289,8 @@ class GibbsSamplingImageRecognizer:
         cdef int num_col = self.num_colors
         cdef int num_iters = n
         cdef int curr_iter = self.current_iteration
-        # cdef int traverse_type[2][2]
-        # traverse_type[0][0] = 0; traverse_type[0][1] = 1; traverse_type[1][0] = 1; traverse_type[1][1] = 0
+        cdef int traverse_type[2][2]
+        traverse_type[0][0] = 0; traverse_type[0][1] = 1; traverse_type[1][0] = 1; traverse_type[1][1] = 0
 
         cdef np.ndarray[GTYPE_t, ndim=3] mean_prob = self.mean_prob
         cdef np.ndarray[DTYPE_t, ndim=3] color_counters = self.color_counters
@@ -264,12 +298,10 @@ class GibbsSamplingImageRecognizer:
         cdef double noiser_p = self.noiser.p
         cdef double noiser_p_spec_noise = self.noiser.p_spec_noise
 
-        for _ in range(0, num_iters):
-            for traverse_type in ((0, 1), (1, 0)):
-            # for traverse_type_index in range(0, 2):
+        for _ in range(0, n):
+            for traverse_type_index in range(0, 2):
                 for i in range(0, h):
-                    # for j in range(traverse_type[traverse_type_index][i % 2], w, 2):
-                    for j in range(traverse_type[i % 2], w, 2):
+                    for j in range(traverse_type[traverse_type_index][i % 2], w, 2):
                         colors_interval = 0
                         curr_color = init_im[i, j]
                         for color in range(0, num_col):                        # Calculation of color's probability distribution
@@ -282,10 +314,10 @@ class GibbsSamplingImageRecognizer:
                                 p_color *= g_v[im[i - 1, j], color]
                             if check_coords(i + 1, j, h, w):
                                 p_color *= g_v[color, im[i + 1, j]]
-                            self.update_mean_prob(color, i, j, self.current_iteration, p_color)
-                            # mean_prob[color, i, j] = (mean_prob[color, i, j] * (curr_iter - 1) + p_color) / curr_iter
+                            mean_prob[color, i, j] = (mean_prob[color, i, j] * (curr_iter - 1) + p_color) / curr_iter
                             p_colors[color] = p_color
                             colors_interval += p_color
+                        # rand_point = np.random.uniform(0, colors_interval)  # choosing a color from calculated distribution
                         rand_point = rk_double(internal_state) * colors_interval
                         p_colors[num_col] = 0                          # for next cycle to work
 
@@ -299,7 +331,7 @@ class GibbsSamplingImageRecognizer:
                             end_of_interval += p_colors[color + 1]
 
             curr_iter += 1
-            # self.update_color_counters()
+            self.update_color_counters()
         self.current_iteration = curr_iter
 
     def iteration_of_line_recognition(self):
@@ -389,7 +421,7 @@ class GibbsSamplingImageRecognizer:
 
     def get_color_prob(self, i, j, color):
 
-        return GibbsSamplingImageGenerator.get_color_prob(self, self.g_vertical, self.g_horizontal, self.image, i, j, color)
+        return GibbsSamplingImageGenerator.get_color_prob(self, i, j, color)
 
     def check_coords(self, i, j):
 
@@ -426,8 +458,8 @@ class GibbsSamplingImageRecognizer:
         elif rec_type == 'line':
             iteration = self.iteration_of_line_recognition
 
-        for i in range(self.current_iteration, self.num_iterations):
-            iteration()
+        # for i in range(self.current_iteration, self.num_iterations):
+        iteration(self.num_iterations - self.current_iteration)
 
     def set_g(self, color1, color2, value, g_type):
 
