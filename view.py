@@ -84,11 +84,11 @@ class MainPage(tk.Frame):
         quit_button = tk.Button(self, text="Quit", command=self.quit)
         quit_button.grid(row=0, column=self.num_columns-1)
 
-        reset_button = tk.Button(self, text="Reset generation", command=self.reset_generation)
-        reset_button.grid(row=0, column=self.num_columns - 6)
+        reset_button_gen = tk.Button(self, text="Reset generation", command=self.reset_generation)
+        reset_button_gen.grid(row=0, column=self.num_columns - 6)
 
-        reset_button = tk.Button(self, text="Reset recognition", command=self.reset_recognition)
-        reset_button.grid(row=0, column=self.num_columns - 3)
+        reset_button_rec = tk.Button(self, text="Reset recognition", command=self.reset_recognition)
+        reset_button_rec.grid(row=0, column=self.num_columns - 3)
 
         show_graph_button = tk.Button(self, text="Test and show graph", command=self.test_and_show_graph)
         show_graph_button.grid(row=0, column=self.num_columns - 5)
@@ -195,16 +195,15 @@ class MainPage(tk.Frame):
 
     def next_generating_iteration(self):
 
-        start = time.time()
         self.controller.sampler.iteration_of_generation()
-        finish = time.time()
-        print("Time: %f" % (finish - start))
         self.update_generated_image()
 
     def next_pixelwise_recognition_iteration(self):
-        # for i in range(20):
-        #     for j in range(1):
+
+        start = time.time()
         self.controller.recognizer.iteration_of_recognition()
+        finish = time.time()
+        print("Time: %f" % (finish - start))
         self.update_recognized_image()
 
     def next_line_recognition_iteration(self):
