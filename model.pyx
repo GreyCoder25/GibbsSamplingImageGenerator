@@ -151,7 +151,7 @@ class GibbsSamplingImageGenerator:
     def reset(self):
 
         """Resets the generated image by generating new random image."""
-        np.random.seed(20)
+        # np.random.seed(20)
         self.image = np.random.randint(0, self.num_colors, size=(self.image_height, self.image_width))
         self.current_iteration = 1
     #
@@ -298,7 +298,7 @@ class GibbsSamplingImageRecognizer:
         cdef double noiser_p = self.noiser.p
         cdef double noiser_p_spec_noise = self.noiser.p_spec_noise
 
-        for _ in range(0, n):
+        for _ in range(0, num_iters):
             for traverse_type_index in range(0, 2):
                 for i in range(0, h):
                     for j in range(traverse_type[traverse_type_index][i % 2], w, 2):
@@ -334,90 +334,155 @@ class GibbsSamplingImageRecognizer:
             self.update_color_counters()
         self.current_iteration = curr_iter
 
-    def iteration_of_line_recognition(self):
+    def iteration_of_line_recognition(self, num_iters=1):
+        self._iteration_of_line_recognition(self.g_vertical, self.g_horizontal, self.initial_image, self.image, num_iters)
 
-        def q1(i, j, k):
+    def _iteration_of_line_recognition(self, np.ndarray[GTYPE_t, ndim=2] g_v, np.ndarray[GTYPE_t, ndim=2] g_h,
+                                 np.ndarray[DTYPE_t, ndim=2] init_im, np.ndarray[DTYPE_t, ndim=2] im, n):
 
-            res = self.noiser.p_x_cond_k('simple', self.initial_image[i, j], k)
-            # res = 1
-            if self.check_coords(i - 1, j):
-                res *= self.g_vertical[self.image[i - 1, j], k]
-            if self.check_coords(i + 1, j):
-                res *= self.g_vertical[k, self.image[i + 1, j]]
+        cdef double noiser_p = self.noiser.p
+        cdef double noiser_p_spec_noise = self.noiser.p_spec_noise
 
-            return res
+        cdef int i, j, k, k_, start_row, label, prev_label, curr_iter = self.current_iteration
+        cdef int h = self.image_height
+        cdef int w = self.image_width
+        cdef int num_col = self.num_colors
+        cdef int num_iters = n
+        cdef double f_sum = 0, l_sum = 0, P_sum = 0, q1_val
+        p_labels_ndarray = np.ones(num_col, dtype=np.float)
+        cdef double [:] p_labels = p_labels_ndarray
+        cdef double interval_begin, interval_end, p_label, rand_point
 
-        def p_k1_k2(i, j1, j2, k1, k2, f_left, f_right, q1):
+        cdef np.ndarray[GTYPE_t, ndim=2] f_left = np.ones((num_col, w), dtype=GTYPE)
+        cdef np.ndarray[GTYPE_t, ndim=2] f_right = np.ones((num_col, w), dtype=GTYPE)
 
-            return f_left[k1, j1] * q1(i, j1, k1) * self.g_horizontal[k1, k2] * q1(i, j2, k2) * f_right[k2, j2]
-
-        def p_k(i, j, k, f_left, f_right, q1):
-
-            return f_left[k, j] * q1(i, j, k) * f_right[k, j]
-
-        def generate_k0(row, f_left, f_right, q1):
-
-            P = np.empty((self.num_colors, self.num_colors))
-            for i in range(self.num_colors):
-                for j in range(self.num_colors):
-                    P[i, j] = p_k1_k2(row, 0, 1, i, j, f_left, f_right, q1)
-
-            P = P.sum(axis=1)
-            rand_point = np.random.uniform(0, P.sum())
-            interval_begin, interval_end = 0, P[0]
-
-            for i in range(self.num_colors):
-                if interval_begin <= rand_point <= interval_end:
-                    return i
-                interval_begin += P[i]
-                interval_end += P[i+1]
+        cdef np.ndarray[GTYPE_t, ndim=2] P = np.ones((num_col, num_col), dtype=GTYPE)
+        cdef np.ndarray[GTYPE_t, ndim=1] P_sums = np.zeros(num_col, dtype=GTYPE)
+        cdef np.ndarray[GTYPE_t, ndim=3] mean_prob = self.mean_prob
 
         # function body begins here
-        for start_row in (0, 1):
-            for i in range(start_row, self.image_height, 2):
-                f_left = np.ones((self.num_colors, self.image_width))
-                for j in range(2, self.image_width):
-                    f_left[:, j] = np.dot(f_left[:, j - 1], self.g_horizontal *
-                                          np.vectorize(q1)(i, j-1, np.arange(self.num_colors)).reshape(self.num_colors, 1))
-                    f_left[:, j] = f_left[:, j] / f_left[:, j].sum()
+        for _ in range(0, num_iters):
+            for start_row in range(0, 2):
+                for i in range(start_row, h, 2):
+                    for j in range(2, w):
+                        f_sum = 0
+                        for k in range(0, num_col):
+                            f_left[k, j] = 0
+                            for k_ in range(0, num_col):
+                                q1_val = p_x_cond_k(init_im[i, j - 1], k_, noiser_p, noiser_p_spec_noise)
+                                if check_coords(i - 1, j - 1, h, w):
+                                    q1_val *= g_v[im[i - 1, j - 1], k_]
+                                if check_coords(i + 1, j - 1, h, w):
+                                    q1_val *= g_v[k_, im[i + 1, j - 1]]
+                                f_left[k, j] += f_left[k_, j-1] * g_h[k_, k] * q1_val
+                            f_sum += f_left[k, j]
 
-                f_right = np.ones((self.num_colors, self.image_width))
-                for j in range(self.image_width - 2, -1, -1):
-                    f_right[:, j] = np.dot(self.g_horizontal * np.vectorize(q1)(i, j+1, np.arange(self.num_colors)),
-                                           f_right[:, j + 1])
-                    f_right[:, j] = f_right[:, j] / f_right[:, j].sum()
+                        for k in range(0, num_col):
+                            f_left[k, j] = f_left[k, j] / f_sum
 
-                self.image[i, 0] = generate_k0(i, f_left, f_right, q1)
-                for label in range(self.num_colors):
-                    self.update_mean_prob(label, i, 0, self.current_iteration, p_k(i, 0, label, f_left, f_right, q1))
+                    for j in range(w - 2, -1, -1):
+                        f_sum = 0
+                        for k in range(0, num_col):
+                            f_right[k, j] = 0
+                            for k_ in range(0, num_col):
+                                q1_val = p_x_cond_k(init_im[i, j + 1], k_, noiser_p, noiser_p_spec_noise)
+                                if check_coords(i - 1, j + 1, h, w):
+                                    q1_val *= g_v[im[i - 1, j + 1], k_]
+                                if check_coords(i + 1, j + 1, h, w):
+                                    q1_val *= g_v[k_, im[i + 1, j + 1]]
+                                f_right[k, j] += f_right[k_, j+1] * g_h[k, k_] * q1_val
+                            f_sum += f_right[k, j]
+                        for k in range(0, num_col):
+                            f_right[k, j] = f_right[k, j] / f_sum
 
-                for j in range(1, self.image_width):
-                    p_labels = []
-                    prev_label = self.image[i, j-1]
-                    for label in range(self.num_colors):
-                        p_label = p_k1_k2(i, j-1, j, prev_label, label, f_left, f_right, q1)
-                        p_labels.append(p_label)
+                    for k in range(0, num_col):
+                        for k_ in range(0, num_col):
+                            P[k, k_] = (f_left[k, 0] * g_h[k, k_] * f_right[k_, 1] *
+                                        p_x_cond_k(init_im[i, 0], k, noiser_p, noiser_p_spec_noise) *
+                                        p_x_cond_k(init_im[i, 1], k_, noiser_p, noiser_p_spec_noise))
+                            if check_coords(i - 1, 0, h, w):
+                                P[k, k_] *= g_v[im[i - 1, 0], k]
+                            if check_coords(i + 1, 0, h, w):
+                                P[k, k_] *= g_v[k, im[i + 1, 0]]
+                            if check_coords(i - 1, 1, h, w):
+                                P[k, k_] *= g_v[im[i - 1, 1], k_]
+                            if check_coords(i + 1, 1, h, w):
+                                P[k, k_] *= g_v[k_, im[i + 1, 1]]
 
-                    p_prev_label = sum(p_labels)
-                    for label_index in range(len(p_labels)):
-                        if p_prev_label > 0:
-                            p_labels[label_index] /= p_prev_label
+                    P_sum = 0
+                    for k in range(0, num_col):
+                        P_sums[k] = 0
+                        for k_ in range(0, num_col):
+                            P_sums[k] += P[k, k_]
+                        P_sum += P_sums[k]
+                    # rand_point = np.random.uniform(0, P_sum)
+                    rand_point = rk_double(internal_state) * P_sum
+                    interval_begin, interval_end = 0, P_sums[0]
 
-                    rand_point = np.random.uniform(0, sum(p_labels))
-                    interval_begin, interval_end = 0, p_labels[0]
-                    for label in range(self.num_colors):
+                    for label in range(0, num_col):
                         if interval_begin <= rand_point <= interval_end:
-                            self.image[i, j] = label
+                            im[i, 0] = label
                             break
-                        interval_begin += p_labels[label]
-                        interval_end += p_labels[label + 1]
+                        interval_begin += P_sums[label]
+                        interval_end += P_sums[label+1]
 
-                    # updating posteriors of labels in current pixel
-                    for label in range(self.num_colors):
-                        self.update_mean_prob(label, i, j, self.current_iteration, p_k(i, j, label, f_left, f_right, q1))
+                    for label in range(0, num_col):
+                        q1_val = p_x_cond_k(init_im[i, 0], label, noiser_p, noiser_p_spec_noise)
+                        if check_coords(i - 1, 0, h, w):
+                            q1_val *= g_v[im[i - 1, 0], label]
+                        if check_coords(i + 1, 0, h, w):
+                            q1_val *= g_v[label, im[i + 1, 0]]
+                        p_k_val = f_left[label, 0] * q1_val * f_right[label, 0]
+                        # self.update_mean_prob(label, i, 0, self.current_iteration, p_k_val)
+                        mean_prob[label, i, 0] = (mean_prob[label, i, 0] * (curr_iter - 1) + p_k_val) / curr_iter
 
-        self.current_iteration += 1
-        self.update_color_counters()
+                    for j in range(1, w):
+                        prev_label = im[i, j-1]
+                        l_sum = 0
+                        for label in range(0, num_col):
+                            p_label = (f_left[prev_label, j-1] * g_h[prev_label, label] * f_right[label, j] *
+                                        p_x_cond_k(init_im[i, j-1], prev_label, noiser_p, noiser_p_spec_noise) *
+                                        p_x_cond_k(init_im[i, j], label, noiser_p, noiser_p_spec_noise))
+                            if check_coords(i - 1, j - 1, h, w):
+                                p_label *= g_v[im[i - 1, j - 1], prev_label]
+                            if check_coords(i + 1, j - 1, h, w):
+                                p_label *= g_v[prev_label, im[i + 1, j - 1]]
+                            if check_coords(i - 1, j, h, w):
+                                p_label *= g_v[im[i - 1, j], label]
+                            if check_coords(i + 1, j, h, w):
+                                p_label *= g_v[label, im[i + 1, j]]
+                            l_sum += p_label
+                            p_labels[label] = p_label
+
+                        # p_prev_label = np.sum(p_labels)
+                        # for label_index in range(len(p_labels)):
+                        #     if p_prev_label > 0:
+                        #         p_labels[label_index] /= p_prev_label
+
+                        # rand_point = np.random.uniform(0, l_sum)
+                        rand_point = rk_double(internal_state) * l_sum
+                        interval_begin, interval_end = 0, p_labels[0]
+                        for label in range(0, num_col):
+                            if interval_begin <= rand_point <= interval_end:
+                                im[i, j] = label
+                                break
+                            interval_begin += p_labels[label]
+                            interval_end += p_labels[label + 1]
+
+                        # updating posteriors of labels in current pixel
+                        for label in range(num_col):
+                            q1_val = p_x_cond_k(init_im[i, j], label, noiser_p, noiser_p_spec_noise)
+                            if check_coords(i - 1, j, h, w):
+                                q1_val *= g_v[im[i - 1, j], label]
+                            if check_coords(i + 1, j, h, w):
+                                q1_val *= g_v[label, im[i + 1, j]]
+                            p_k_val = f_left[label, j] * q1_val * f_right[label, j]
+                            # self.update_mean_prob(label, i, j, self.current_iteration, p_k_val)
+                            mean_prob[label, i, j] = (mean_prob[label, i, j] * (curr_iter - 1) + p_k_val) / curr_iter
+
+            curr_iter += 1
+            self.update_color_counters()
+        self.current_iteration = curr_iter
 
     def get_color_prob(self, i, j, color):
 

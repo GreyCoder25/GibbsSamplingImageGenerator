@@ -186,7 +186,7 @@ class MainPage(tk.Frame):
 
     def show_noisy_image(self):
 
-        np.random.seed(20)
+        # np.random.seed(20)
         self.controller.recognizer.set_image(self.controller.noiser.simple_noise(self.controller.sampler.image,
                                                                                  self.controller.recognizer.num_colors, 0.4))
 
@@ -212,10 +212,10 @@ class MainPage(tk.Frame):
 
     def next_line_recognition_iteration(self):
 
-        # for i in range(1000):
-        # for i in range(20):
-        #     for j in range(1):
+        start = time.time()
         self.controller.recognizer.iteration_of_line_recognition()
+        finish = time.time()
+        print("Line recognizing iteration time: %f" % (finish - start))
         self.update_recognized_image()
 
     def execute_all_gen_remaining(self):
